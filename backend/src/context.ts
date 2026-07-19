@@ -1,0 +1,37 @@
+import type { AppConfig } from './config.js';
+import { openDb, type DB } from './db/index.js';
+import { ServersRepo } from './db/serversRepo.js';
+import { PortAllocator } from './services/portAllocator.js';
+import { DockerService } from './services/dockerService.js';
+import { DnsService } from './services/dnsService.js';
+import { RconService } from './services/rconService.js';
+import { ServerManager } from './services/serverManager.js';
+import { ModService } from './services/modService.js';
+import { DdnsJob } from './jobs/ddns.js';
+
+/** Wires up all singletons from config. Built once at startup. */
+export interface AppContext {
+  config: AppConfig;
+  db: DB;
+  repo: ServersRepo;
+  allocator: PortAllocator;
+  docker: DockerService;
+  dns: DnsService;
+  rcon: RconService;
+  mods: ModService;
+  manager: ServerManager;
+  ddns: DdnsJob;
+}
+
+export function buildContext(config: AppConfig): AppContext {
+  const db = openDb(config.dbPath);
+  const repo = new ServersRepo(db);
+  const allocator = new PortAllocator(db, config.gamePortRange, config.rconPortRange);
+  const docker = new DockerService(config);
+  const dns = new DnsService(db, config);
+  const rcon = new RconService(config);
+  const mods = new ModService();
+  const manager = new ServerManager(db, repo, allocator, docker, dns, rcon, config);
+  const ddns = new DdnsJob(dns, config);
+  return { config, db, repo, allocator, docker, dns, rcon, mods, manager, ddns };
+}
