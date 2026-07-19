@@ -128,8 +128,8 @@ export class ModService {
     return scored.slice(0, limit).map((s) => s.entry);
   }
 
-  /** Look up a mod's latest release on the portal. */
-  async latestRelease(name: string): Promise<ModRelease> {
+  /** Fetch a mod's full release list from the portal. */
+  private async releases(name: string): Promise<ModRelease[]> {
     let res: Response;
     try {
       res = await fetch(`${MOD_PORTAL_BASE}/api/mods/${encodeURIComponent(name)}`, {
@@ -143,17 +143,35 @@ export class ModService {
     const info = (await res.json()) as ModInfoResponse;
     const releases = info.releases ?? [];
     if (releases.length === 0) throw new ValidationError(`Mod "${name}" has no releases`);
+    return releases;
+  }
+
+  /** Look up a mod's latest release on the portal. */
+  async latestRelease(name: string): Promise<ModRelease> {
+    const releases = await this.releases(name);
     return releases[releases.length - 1];
   }
 
-  /** Download a mod's latest release zip into the server's mods dir. */
-  async downloadMod(server: ServerRow, name: string): Promise<string> {
+  /** Look up a specific pinned version, or the latest if `version` is undefined. */
+  async getRelease(name: string, version?: string): Promise<ModRelease> {
+    if (!version) return this.latestRelease(name);
+    const releases = await this.releases(name);
+    const match = releases.find((r) => r.version === version);
+    if (!match) throw new ValidationError(`Mod "${name}" has no release ${version}`);
+    return match;
+  }
+
+  /**
+   * Download a mod release into the server's mods dir. `version` pins a specific
+   * release; omit for latest. Returns the downloaded version.
+   */
+  async downloadMod(server: ServerRow, name: string, version?: string): Promise<string> {
     if (!server.mod_portal_username || !server.mod_portal_token) {
       throw new ValidationError(
         'Mod portal credentials are required to download mods; set them on the server first',
       );
     }
-    const release = await this.latestRelease(name);
+    const release = await this.getRelease(name, version);
     const url =
       `${MOD_PORTAL_BASE}${release.download_url}` +
       `?username=${encodeURIComponent(server.mod_portal_username)}` +
@@ -196,7 +214,7 @@ export class ModService {
     for (const entry of entries) {
       if (!entry.enabled || entry.name === 'base') continue;
       try {
-        const version = await this.downloadMod(server, entry.name);
+        const version = await this.downloadMod(server, entry.name, entry.version);
         downloaded.push({ name: entry.name, version });
       } catch (err) {
         errors.push({ name: entry.name, error: (err as Error).message });

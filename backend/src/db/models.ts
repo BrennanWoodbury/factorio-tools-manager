@@ -16,6 +16,11 @@ export interface ServerRow {
   status: string;
   created_at: string;
   updated_at: string;
+  /** Full editable server-settings.json body (advanced fields only). Nullable
+   *  until first edited; defaulted in code. Added in migration v1. */
+  settings_json: string | null;
+  /** Modpack last applied to this server (for display / re-apply). Migration v2. */
+  applied_modpack_id: string | null;
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */
@@ -34,6 +39,7 @@ export interface ServerDto {
   status: string;
   createdAt: string;
   updatedAt: string;
+  appliedModpackId: string | null;
   /** Fully-qualified connect hostname players use, when DNS is enabled. */
   connectHost?: string;
 }
@@ -54,6 +60,7 @@ export function toDto(row: ServerRow, connectHost?: string): ServerDto {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    appliedModpackId: row.applied_modpack_id ?? null,
     connectHost,
   };
 }

@@ -2,6 +2,7 @@ import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SCHEMA_SQL } from './schema.js';
+import { runMigrations } from './migrations.js';
 
 /**
  * Thin wrapper over Node's built-in synchronous SQLite (`node:sqlite`), exposing
@@ -101,6 +102,7 @@ export function openDb(filename: string): DB {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
+  runMigrations(db);
   return db;
 }
 

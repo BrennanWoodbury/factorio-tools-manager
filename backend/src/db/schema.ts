@@ -60,4 +60,26 @@ CREATE TABLE IF NOT EXISTS kv (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Shared, reusable mod collections (a local registry). A modpack is just a
+-- manifest — mod names + enabled flags + optional pinned versions. It stores no
+-- mod binaries and no credentials; servers download the actual zips at apply time
+-- using their own mod-portal credentials.
+CREATE TABLE IF NOT EXISTS modpacks (
+  id               TEXT PRIMARY KEY,
+  name             TEXT NOT NULL UNIQUE,
+  description      TEXT NOT NULL DEFAULT '',
+  factorio_version TEXT NOT NULL DEFAULT '',
+  created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS modpack_mods (
+  modpack_id TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  version    TEXT,                 -- NULL = "latest"
+  PRIMARY KEY (modpack_id, name),
+  FOREIGN KEY (modpack_id) REFERENCES modpacks(id) ON DELETE CASCADE
+);
 `;

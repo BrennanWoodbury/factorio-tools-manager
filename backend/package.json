@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dockerode": "^4.0.2",
@@ -21,6 +22,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.5",
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
     "@types/dockerode": "^3.3.31",

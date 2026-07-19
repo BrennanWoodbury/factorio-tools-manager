@@ -100,6 +100,8 @@ export class ServerManager {
       status: 'stopped',
       created_at: '',
       updated_at: '',
+      settings_json: null,
+      applied_modpack_id: null,
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
