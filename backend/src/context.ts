@@ -1,7 +1,9 @@
 import type { AppConfig } from './config.js';
 import { openDb, type DB } from './db/index.js';
 import { ServersRepo } from './db/serversRepo.js';
+import { ModpacksRepo } from './db/modpacksRepo.js';
 import { PortAllocator } from './services/portAllocator.js';
+import { ModpackService } from './services/modpackService.js';
 import { DockerService } from './services/dockerService.js';
 import { DnsService } from './services/dnsService.js';
 import { RconService } from './services/rconService.js';
@@ -19,6 +21,7 @@ export interface AppContext {
   dns: DnsService;
   rcon: RconService;
   mods: ModService;
+  modpacks: ModpackService;
   manager: ServerManager;
   ddns: DdnsJob;
 }
@@ -31,7 +34,9 @@ export function buildContext(config: AppConfig): AppContext {
   const dns = new DnsService(db, config);
   const rcon = new RconService(config);
   const mods = new ModService();
+  const modpacksRepo = new ModpacksRepo(db);
+  const modpacks = new ModpackService(modpacksRepo, repo, mods);
   const manager = new ServerManager(db, repo, allocator, docker, dns, rcon, config);
   const ddns = new DdnsJob(dns, config);
-  return { config, db, repo, allocator, docker, dns, rcon, mods, manager, ddns };
+  return { config, db, repo, allocator, docker, dns, rcon, mods, modpacks, manager, ddns };
 }

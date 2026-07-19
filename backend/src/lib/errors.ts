@@ -22,6 +22,12 @@ export class DuplicateSubdomainError extends AppError {
   }
 }
 
+export class DuplicateModpackError extends AppError {
+  constructor(name: string) {
+    super(`A modpack named "${name}" already exists`, 409, 'DUPLICATE_MODPACK');
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(what = 'Resource') {
     super(`${what} not found`, 404, 'NOT_FOUND');
