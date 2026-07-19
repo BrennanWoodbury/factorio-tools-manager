@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { buildContext } from './context.js';
 import { authRouter } from './routes/auth.js';
 import { serversRouter } from './routes/servers.js';
+import { modsRouter } from './routes/mods.js';
 import { systemRouter } from './routes/system.js';
 import { requireAuth } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -40,6 +41,7 @@ async function main() {
   // Everything else under /api requires a valid session.
   app.use('/api', requireAuth(config));
   app.use('/api/servers', serversRouter(ctx));
+  app.use('/api/mods', modsRouter(ctx));
   app.use('/api/system', systemRouter(ctx));
 
   // Serve the built SPA if present (single-container deployment).

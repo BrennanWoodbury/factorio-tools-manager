@@ -1,4 +1,4 @@
-import type { ModEntry, SaveInfo, Server, ServerStatus, SystemStatus } from './types';
+import type { CatalogEntry, ModEntry, SaveInfo, Server, ServerStatus, SystemStatus } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -83,6 +83,9 @@ export const api = {
       downloaded: { name: string; version: string }[];
       errors: { name: string; error: string }[];
     }>('PUT', `/servers/${id}/mods`, { mods }),
+
+  searchMods: (q: string, limit = 25) =>
+    req<{ results: CatalogEntry[] }>('GET', `/mods/search?q=${encodeURIComponent(q)}&limit=${limit}`),
 
   // rcon
   rcon: (id: string, command: string) =>

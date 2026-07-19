@@ -37,6 +37,17 @@ export interface ModEntry {
   version?: string;
 }
 
+export interface CatalogEntry {
+  name: string;
+  title: string;
+  owner: string;
+  summary: string;
+  downloadsCount: number;
+  category: string;
+  latestVersion?: string;
+  factorioVersion?: string;
+}
+
 export interface SystemStatus {
   docker: { ok: boolean; error?: string };
   dns: { enabled: boolean; baseDomain: string | null; hostRecord: string | null };

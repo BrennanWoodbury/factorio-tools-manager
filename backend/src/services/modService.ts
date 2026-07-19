@@ -16,6 +16,31 @@ interface ModInfoResponse {
   releases?: ModRelease[];
 }
 
+/** Trimmed mod catalog entry we cache and search over. */
+export interface CatalogEntry {
+  name: string;
+  title: string;
+  owner: string;
+  summary: string;
+  downloadsCount: number;
+  category: string;
+  latestVersion?: string;
+  factorioVersion?: string;
+}
+
+/** Shape of a result in the portal's `/api/mods?page_size=max` listing. */
+interface PortalListEntry {
+  name: string;
+  title: string;
+  owner: string;
+  summary: string;
+  downloads_count: number;
+  category?: string;
+  latest_release?: { version?: string; info_json?: { factorio_version?: string } };
+}
+
+const CATALOG_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+
 /**
  * Mod management via the Factorio Mod Portal API.
  *
@@ -29,6 +54,80 @@ interface ModInfoResponse {
  * of scope for the MVP — enabling a mod downloads that mod's latest release only.
  */
 export class ModService {
+  // Cached full mod catalog. The portal has no keyword-search endpoint, so we
+  // fetch the whole listing (~13MB, one request) and filter/rank in-memory,
+  // refreshing at most every CATALOG_TTL_MS. An in-flight promise dedupes
+  // concurrent refreshes.
+  private catalog: CatalogEntry[] = [];
+  private catalogFetchedAt = 0;
+  private catalogInFlight?: Promise<CatalogEntry[]>;
+
+  private async ensureCatalog(force = false): Promise<CatalogEntry[]> {
+    const fresh = Date.now() - this.catalogFetchedAt < CATALOG_TTL_MS;
+    if (!force && fresh && this.catalog.length > 0) return this.catalog;
+    if (this.catalogInFlight) return this.catalogInFlight;
+
+    this.catalogInFlight = (async () => {
+      let res: Response;
+      try {
+        res = await fetch(`${MOD_PORTAL_BASE}/api/mods?page_size=max`, {
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch (err) {
+        throw new AppError(`Mod portal unreachable: ${(err as Error).message}`, 502, 'MOD_PORTAL');
+      }
+      if (!res.ok) throw new AppError(`Mod portal HTTP ${res.status}`, 502, 'MOD_PORTAL');
+      const body = (await res.json()) as { results?: PortalListEntry[] };
+      this.catalog = (body.results ?? [])
+        // Drop placeholder/internal junk entries with no real title.
+        .filter((r) => r.category !== 'internal' && r.title && r.title !== '[placeholder]')
+        .map((r) => ({
+          name: r.name,
+          title: r.title,
+          owner: r.owner,
+          summary: r.summary ?? '',
+          downloadsCount: r.downloads_count ?? 0,
+          category: r.category ?? '',
+          latestVersion: r.latest_release?.version,
+          factorioVersion: r.latest_release?.info_json?.factorio_version,
+        }));
+      this.catalogFetchedAt = Date.now();
+      return this.catalog;
+    })();
+
+    try {
+      return await this.catalogInFlight;
+    } finally {
+      this.catalogInFlight = undefined;
+    }
+  }
+
+  /**
+   * Search the mod catalog by keyword. Matches against name/title/owner, ranks
+   * exact-name and prefix matches first, then by download count. Returns at most
+   * `limit` trimmed entries.
+   */
+  async search(query: string, limit = 25): Promise<CatalogEntry[]> {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const catalog = await this.ensureCatalog();
+    const scored: { entry: CatalogEntry; rank: number }[] = [];
+    for (const entry of catalog) {
+      const name = entry.name.toLowerCase();
+      const title = entry.title.toLowerCase();
+      const owner = entry.owner.toLowerCase();
+      let rank: number;
+      if (name === q || title === q) rank = 0;
+      else if (name.startsWith(q) || title.startsWith(q)) rank = 1;
+      else if (name.includes(q) || title.includes(q)) rank = 2;
+      else if (owner.includes(q) || entry.summary.toLowerCase().includes(q)) rank = 3;
+      else continue;
+      scored.push({ entry, rank });
+    }
+    scored.sort((a, b) => a.rank - b.rank || b.entry.downloadsCount - a.entry.downloadsCount);
+    return scored.slice(0, limit).map((s) => s.entry);
+  }
+
   /** Look up a mod's latest release on the portal. */
   async latestRelease(name: string): Promise<ModRelease> {
     let res: Response;

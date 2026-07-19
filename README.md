@@ -121,8 +121,9 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   releases the ports and deletes the data dir.
 - **Console:** live RCON console + player list (over loopback / Docker network only).
 - **Saves:** upload a `.zip`, list, pick which to load next, download, delete.
-- **Mods:** edit the mod list; with mod-portal credentials, enabled mods are downloaded from the
-  Factorio Mod Portal. Changes apply on next start.
+- **Mods:** search the Factorio Mod Portal by keyword and add mods to the list with one click (no
+  need to know the exact internal name); edit/enable/disable entries. With mod-portal credentials,
+  enabled mods are downloaded on save. Changes apply on next start.
 
 ### Mods: why the Mod Portal API (not `UPDATE_MODS_ON_START`)
 
@@ -196,6 +197,7 @@ for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id)
 | GET | `/servers/:id/logs` | container logs |
 | GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / select / download / delete |
 | GET/PUT | `/servers/:id/mods` | get / apply mod list |
+| GET | `/mods/search?q=` | search the mod portal catalog |
 | POST | `/servers/:id/rcon` | run an RCON command |
 
 ---
