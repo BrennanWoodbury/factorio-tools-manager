@@ -29,8 +29,8 @@ export function CreateServerForm({
         maxPlayers,
         description,
         generateNewSave: true,
-        modPortalUsername: modUser || undefined,
-        modPortalToken: modToken || undefined,
+        factorioUsername: modUser || undefined,
+        factorioToken: modToken || undefined,
       });
       toastSuccess(`Created "${server.name}"`);
       onCreated(server.id);
@@ -96,11 +96,11 @@ export function CreateServerForm({
 
         <details style={{ marginTop: 12 }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>
-            Mod portal credentials (optional — needed to download mods)
+            Factorio.com account (optional — for downloading mods & public listing)
           </summary>
-          <label>Mod portal username</label>
+          <label>Factorio.com username</label>
           <input value={modUser} onChange={(e) => setModUser(e.target.value)} />
-          <label>Mod portal token</label>
+          <label>Factorio.com token</label>
           <input value={modToken} onChange={(e) => setModToken(e.target.value)} type="password" />
         </details>
 

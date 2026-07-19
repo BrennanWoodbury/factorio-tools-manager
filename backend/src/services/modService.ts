@@ -167,7 +167,7 @@ export class ModService {
    * release; omit for latest. Returns the downloaded version.
    */
   async downloadMod(server: ServerRow, name: string, version?: string): Promise<string> {
-    if (!server.mod_portal_username || !server.mod_portal_token) {
+    if (!server.factorio_username || !server.factorio_token) {
       throw new ValidationError(
         'Mod portal credentials are required to download mods; set them on the server first',
       );
@@ -175,8 +175,8 @@ export class ModService {
     const release = await this.getRelease(name, version);
     const url =
       `${MOD_PORTAL_BASE}${release.download_url}` +
-      `?username=${encodeURIComponent(server.mod_portal_username)}` +
-      `&token=${encodeURIComponent(server.mod_portal_token)}`;
+      `?username=${encodeURIComponent(server.factorio_username)}` +
+      `&token=${encodeURIComponent(server.factorio_token)}`;
 
     let res: Response;
     try {

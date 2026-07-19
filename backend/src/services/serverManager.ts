@@ -17,8 +17,8 @@ export interface CreateServerInput {
   description?: string;
   saveName?: string;
   generateNewSave?: boolean;
-  modPortalUsername?: string;
-  modPortalToken?: string;
+  factorioUsername?: string;
+  factorioToken?: string;
   mods?: ModEntry[];
 }
 
@@ -29,8 +29,8 @@ export interface UpdateServerInput {
   description?: string;
   saveName?: string;
   generateNewSave?: boolean;
-  modPortalUsername?: string;
-  modPortalToken?: string;
+  factorioUsername?: string;
+  factorioToken?: string;
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -94,8 +94,8 @@ export class ServerManager {
       rcon_password: rconPassword,
       save_name: saveName,
       generate_new_save: input.generateNewSave === false ? 0 : 1,
-      mod_portal_username: input.modPortalUsername ?? '',
-      mod_portal_token: input.modPortalToken ?? '',
+      factorio_username: input.factorioUsername ?? '',
+      factorio_token: input.factorioToken ?? '',
       container_id: null,
       status: 'stopped',
       created_at: '',
@@ -148,8 +148,8 @@ export class ServerManager {
     if (input.maxPlayers !== undefined) fields.max_players = input.maxPlayers;
     if (input.saveName !== undefined) fields.save_name = input.saveName.trim() || 'default';
     if (input.generateNewSave !== undefined) fields.generate_new_save = input.generateNewSave ? 1 : 0;
-    if (input.modPortalUsername !== undefined) fields.mod_portal_username = input.modPortalUsername;
-    if (input.modPortalToken !== undefined) fields.mod_portal_token = input.modPortalToken;
+    if (input.factorioUsername !== undefined) fields.factorio_username = input.factorioUsername;
+    if (input.factorioToken !== undefined) fields.factorio_token = input.factorioToken;
 
     let subdomainChanged = false;
     if (input.subdomain !== undefined && input.subdomain !== current.subdomain) {

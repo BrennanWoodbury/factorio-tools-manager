@@ -26,6 +26,23 @@ const MIGRATIONS: Migration[] = [
     // (SQLite can't ADD COLUMN with a FK); referential cleanup is done in code.
     up: (db) => db.exec('ALTER TABLE servers ADD COLUMN applied_modpack_id TEXT'),
   },
+  {
+    version: 3,
+    // Rename the factorio.com account credential columns: the same username/token
+    // is used both for mod-portal downloads AND public-server listing, so the
+    // mod-centric name was misleading. Guarded so it's a no-op on fresh DBs (where
+    // schema.ts already creates the new names).
+    up: (db) => {
+      const cols = db.prepare<{ name: string }>('PRAGMA table_info(servers)').all();
+      const has = (n: string) => cols.some((c) => c.name === n);
+      if (has('mod_portal_username') && !has('factorio_username')) {
+        db.exec('ALTER TABLE servers RENAME COLUMN mod_portal_username TO factorio_username');
+      }
+      if (has('mod_portal_token') && !has('factorio_token')) {
+        db.exec('ALTER TABLE servers RENAME COLUMN mod_portal_token TO factorio_token');
+      }
+    },
+  },
 ];
 
 export function runMigrations(db: DB): void {

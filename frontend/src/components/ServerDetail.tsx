@@ -121,7 +121,7 @@ function Overview({ server, status }: { server: Server; status: ServerStatus | n
     ['RCON port (loopback TCP)', String(server.rconPort)],
     ['Selected save', server.saveName],
     ['Generate new save on start', server.generateNewSave ? 'yes' : 'no'],
-    ['Mod portal credentials', server.hasModPortalCredentials ? 'set' : 'not set'],
+    ['Factorio.com credentials', server.hasFactorioCredentials ? 'set' : 'not set'],
     ['Container state', status?.status ?? server.status],
     ['Started at', status?.startedAt ? new Date(status.startedAt).toLocaleString() : '—'],
     ['Created', new Date(server.createdAt).toLocaleString()],

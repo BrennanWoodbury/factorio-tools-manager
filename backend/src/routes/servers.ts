@@ -17,8 +17,8 @@ const createSchema = z.object({
   description: z.string().max(1000).optional(),
   saveName: z.string().max(100).optional(),
   generateNewSave: z.boolean().optional(),
-  modPortalUsername: z.string().max(100).optional(),
-  modPortalToken: z.string().max(200).optional(),
+  factorioUsername: z.string().max(100).optional(),
+  factorioToken: z.string().max(200).optional(),
   mods: z.array(modEntrySchema).optional(),
 });
 
@@ -29,8 +29,8 @@ const updateSchema = z.object({
   description: z.string().max(1000).optional(),
   saveName: z.string().max(100).optional(),
   generateNewSave: z.boolean().optional(),
-  modPortalUsername: z.string().max(100).optional(),
-  modPortalToken: z.string().max(200).optional(),
+  factorioUsername: z.string().max(100).optional(),
+  factorioToken: z.string().max(200).optional(),
 });
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {

@@ -8,7 +8,7 @@ export interface Server {
   rconPort: number;
   saveName: string;
   generateNewSave: boolean;
-  hasModPortalCredentials: boolean;
+  hasFactorioCredentials: boolean;
   containerId: string | null;
   status: string;
   createdAt: string;

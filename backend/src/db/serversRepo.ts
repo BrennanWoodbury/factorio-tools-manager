@@ -12,12 +12,12 @@ export class ServersRepo {
       .prepare(
         `INSERT INTO servers
           (id, name, subdomain, description, max_players, game_port, rcon_port,
-           rcon_password, save_name, generate_new_save, mod_portal_username,
-           mod_portal_token, container_id, status)
+           rcon_password, save_name, generate_new_save, factorio_username,
+           factorio_token, container_id, status)
          VALUES
           (@id, @name, @subdomain, @description, @max_players, @game_port, @rcon_port,
-           @rcon_password, @save_name, @generate_new_save, @mod_portal_username,
-           @mod_portal_token, @container_id, @status)`,
+           @rcon_password, @save_name, @generate_new_save, @factorio_username,
+           @factorio_token, @container_id, @status)`,
       )
       // node:sqlite supports named params via an object argument
       .run(row as unknown as NamedParams);
@@ -62,8 +62,8 @@ export class ServersRepo {
         | 'subdomain'
         | 'save_name'
         | 'generate_new_save'
-        | 'mod_portal_username'
-        | 'mod_portal_token'
+        | 'factorio_username'
+        | 'factorio_token'
       >
     >,
   ): void {

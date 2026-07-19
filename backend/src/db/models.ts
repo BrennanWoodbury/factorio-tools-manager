@@ -10,8 +10,8 @@ export interface ServerRow {
   rcon_password: string;
   save_name: string;
   generate_new_save: number; // 0 | 1
-  mod_portal_username: string;
-  mod_portal_token: string;
+  factorio_username: string;
+  factorio_token: string;
   container_id: string | null;
   status: string;
   created_at: string;
@@ -34,7 +34,7 @@ export interface ServerDto {
   rconPort: number;
   saveName: string;
   generateNewSave: boolean;
-  hasModPortalCredentials: boolean;
+  hasFactorioCredentials: boolean;
   containerId: string | null;
   status: string;
   createdAt: string;
@@ -55,7 +55,7 @@ export function toDto(row: ServerRow, connectHost?: string): ServerDto {
     rconPort: row.rcon_port,
     saveName: row.save_name,
     generateNewSave: row.generate_new_save === 1,
-    hasModPortalCredentials: row.mod_portal_username !== '' && row.mod_portal_token !== '',
+    hasFactorioCredentials: row.factorio_username !== '' && row.factorio_token !== '',
     containerId: row.container_id,
     status: row.status,
     createdAt: row.created_at,

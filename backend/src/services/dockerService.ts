@@ -74,9 +74,9 @@ export class DockerService {
       // trying to update them on boot (which would also fail without creds).
       UPDATE_MODS_ON_START: 'false',
     };
-    if (server.mod_portal_username && server.mod_portal_token) {
-      env.USERNAME = server.mod_portal_username;
-      env.TOKEN = server.mod_portal_token;
+    if (server.factorio_username && server.factorio_token) {
+      env.USERNAME = server.factorio_username;
+      env.TOKEN = server.factorio_token;
     }
     if (this.config.puid) env.PUID = this.config.puid;
     if (this.config.pgid) env.PGID = this.config.pgid;

@@ -24,8 +24,8 @@ export function SettingsPanel({
   const save = async () => {
     setBusy(true);
     const patch: Record<string, unknown> = { name, subdomain, maxPlayers, description };
-    if (modUser) patch.modPortalUsername = modUser;
-    if (modToken) patch.modPortalToken = modToken;
+    if (modUser) patch.factorioUsername = modUser;
+    if (modToken) patch.factorioToken = modToken;
     await run(() => api.updateServer(server.id, patch), 'Settings saved');
     setModUser('');
     setModToken('');
@@ -58,11 +58,12 @@ export function SettingsPanel({
 
         <details style={{ marginTop: 12 }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>
-            Update mod portal credentials {server.hasModPortalCredentials ? '(currently set)' : '(not set)'}
+            Update Factorio.com credentials (mods & public listing){' '}
+            {server.hasFactorioCredentials ? '(currently set)' : '(not set)'}
           </summary>
-          <label>Mod portal username</label>
+          <label>Factorio.com username</label>
           <input value={modUser} onChange={(e) => setModUser(e.target.value)} />
-          <label>Mod portal token</label>
+          <label>Factorio.com token</label>
           <input type="password" value={modToken} onChange={(e) => setModToken(e.target.value)} />
         </details>
 
