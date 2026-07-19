@@ -1,0 +1,144 @@
+import { useCallback, useEffect, useState } from 'react';
+import { api } from '../api';
+import type { Server, ServerStatus } from '../types';
+import { StatusBadge } from './StatusBadge';
+import { Console } from './Console';
+import { SavesPanel } from './SavesPanel';
+import { ModsPanel } from './ModsPanel';
+import { SettingsPanel } from './SettingsPanel';
+import { run, toastError } from '../ui';
+
+type Tab = 'overview' | 'console' | 'saves' | 'mods' | 'settings';
+
+export function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
+  const [server, setServer] = useState<Server | null>(null);
+  const [status, setStatus] = useState<ServerStatus | null>(null);
+  const [tab, setTab] = useState<Tab>('overview');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [{ server }, st] = await Promise.all([api.getServer(id), api.status(id).catch(() => null)]);
+      setServer(server);
+      if (st) setStatus(st);
+    } catch (err) {
+      toastError((err as Error).message);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    void load();
+    const t = setInterval(() => void api.status(id).then(setStatus).catch(() => {}), 4000);
+    return () => clearInterval(t);
+  }, [id, load]);
+
+  if (!server) return <div className="muted">Loading…</div>;
+  const running = status?.running ?? server.status === 'running';
+
+  const action = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true);
+    await run(fn, ok);
+    await load();
+    setBusy(false);
+  };
+
+  return (
+    <>
+      <button className="ghost" onClick={onBack} style={{ marginBottom: 14 }}>
+        ← Back
+      </button>
+
+      <div className="panel">
+        <div className="spread">
+          <div>
+            <div className="row" style={{ alignItems: 'center' }}>
+              <h2 style={{ margin: 0 }}>{server.name}</h2>
+              <StatusBadge running={running} />
+            </div>
+            <div className="small muted mono" style={{ marginTop: 4 }}>
+              {server.connectHost ? (
+                <>connect: {server.connectHost} · </>
+              ) : null}
+              game port {server.gamePort} · rcon 127.0.0.1:{server.rconPort} (loopback)
+            </div>
+          </div>
+          <div className="row">
+            {running ? (
+              <>
+                <button disabled={busy} onClick={() => action(() => api.restart(id), 'Restarted')}>
+                  Restart
+                </button>
+                <button disabled={busy} onClick={() => action(() => api.stop(id), 'Stopped')}>
+                  Stop
+                </button>
+              </>
+            ) : (
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => action(() => api.start(id), 'Started')}
+              >
+                Start
+              </button>
+            )}
+          </div>
+        </div>
+        {running && status?.players && (
+          <div className="small muted" style={{ marginTop: 10 }}>
+            👥 {status.players.count} online
+            {status.players.names.length > 0 ? `: ${status.players.names.join(', ')}` : ''}
+          </div>
+        )}
+        {status?.playersError && (
+          <div className="small" style={{ color: 'var(--muted)', marginTop: 8 }}>
+            Player list unavailable ({status.playersError})
+          </div>
+        )}
+      </div>
+
+      <div className="tabs">
+        {(['overview', 'console', 'saves', 'mods', 'settings'] as Tab[]).map((t) => (
+          <div key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
+            {t[0].toUpperCase() + t.slice(1)}
+          </div>
+        ))}
+      </div>
+
+      {tab === 'overview' && <Overview server={server} status={status} />}
+      {tab === 'console' && <Console id={id} running={running} />}
+      {tab === 'saves' && <SavesPanel server={server} onChanged={load} />}
+      {tab === 'mods' && <ModsPanel server={server} />}
+      {tab === 'settings' && <SettingsPanel server={server} onChanged={load} onDeleted={onBack} />}
+    </>
+  );
+}
+
+function Overview({ server, status }: { server: Server; status: ServerStatus | null }) {
+  const rows: [string, string][] = [
+    ['Subdomain', server.subdomain],
+    ['Connect host', server.connectHost ?? '(DNS off — use IP:port)'],
+    ['Game port (UDP)', String(server.gamePort)],
+    ['RCON port (loopback TCP)', String(server.rconPort)],
+    ['Selected save', server.saveName],
+    ['Generate new save on start', server.generateNewSave ? 'yes' : 'no'],
+    ['Mod portal credentials', server.hasModPortalCredentials ? 'set' : 'not set'],
+    ['Container state', status?.status ?? server.status],
+    ['Started at', status?.startedAt ? new Date(status.startedAt).toLocaleString() : '—'],
+    ['Created', new Date(server.createdAt).toLocaleString()],
+  ];
+  return (
+    <div className="panel">
+      <table>
+        <tbody>
+          {rows.map(([k, v]) => (
+            <tr key={k}>
+              <th style={{ width: 220 }}>{k}</th>
+              <td className="mono">{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {server.description && <p className="muted" style={{ marginTop: 14 }}>{server.description}</p>}
+    </div>
+  );
+}

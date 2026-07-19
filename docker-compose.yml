@@ -1,0 +1,58 @@
+# Runs the manager. The per-server Factorio containers are created dynamically by
+# the manager itself over the mounted Docker socket (they are NOT declared here).
+#
+# The manager and every Factorio container it creates join the `factorio-net`
+# bridge network, so the manager reaches each server's RCON over that network
+# (RCON is never published to the internet).
+
+services:
+  manager:
+    build: .
+    image: factorio-manager:latest
+    container_name: factorio-manager
+    restart: unless-stopped
+    ports:
+      # Web UI + API. Put a TLS reverse proxy in front of this in production.
+      - "8080:8080"
+    environment:
+      # --- Auth (required) ---
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:-}
+
+      # --- Data ---
+      DATA_DIR: /data
+      # IMPORTANT: absolute path ON THE HOST to ./data/servers. The manager passes
+      # this to the Docker daemon as the bind-mount source for each Factorio
+      # container, so it must be the host path, not the in-container /data path.
+      HOST_SERVERS_DIR: ${HOST_SERVERS_DIR:?set HOST_SERVERS_DIR to the absolute host path of ./data/servers}
+
+      # --- Port pools (must match what you forwarded on the router) ---
+      GAME_PORT_RANGE: ${GAME_PORT_RANGE:-34197-34297}
+      RCON_PORT_RANGE: ${RCON_PORT_RANGE:-27015-27115}
+
+      # --- Docker / Factorio image ---
+      FACTORIO_IMAGE: ${FACTORIO_IMAGE:-factoriotools/factorio:stable}
+      FACTORIO_NETWORK: factorio-net
+      RCON_MODE: network
+      PUID: ${PUID:-845}
+      PGID: ${PGID:-845}
+
+      # --- DNS / DDNS (Cloudflare). Leave CLOUDFLARE_API_TOKEN empty to disable. ---
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
+      BASE_DOMAIN: ${BASE_DOMAIN:-}
+      HOST_RECORD_NAME: ${HOST_RECORD_NAME:-}
+      DDNS_INTERVAL_SECONDS: ${DDNS_INTERVAL_SECONDS:-300}
+      IP_CHECK_URL: ${IP_CHECK_URL:-https://api.ipify.org}
+    volumes:
+      # Manage sibling containers via the host Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persistent data: SQLite DB + per-server save/mod/config dirs.
+      - ./data:/data
+    networks:
+      - factorio-net
+
+networks:
+  factorio-net:
+    name: factorio-net
+    driver: bridge
