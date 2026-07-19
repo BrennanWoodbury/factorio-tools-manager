@@ -57,6 +57,8 @@ export const api = {
   // saves
   listSaves: (id: string) =>
     req<{ saves: SaveInfo[]; selected: string }>('GET', `/servers/${id}/saves`),
+  createSave: (id: string, name: string) =>
+    req<{ name: string; saves: SaveInfo[] }>('POST', `/servers/${id}/saves/create`, { name }),
   selectSave: (id: string, name: string) =>
     req<{ server: Server }>('POST', `/servers/${id}/saves/${encodeURIComponent(name)}/select`),
   deleteSave: (id: string, name: string) =>

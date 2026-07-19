@@ -42,7 +42,7 @@ export function SavesPanel({ server, onChanged }: { server: Server; onChanged: (
     <div className="panel">
       <div className="spread" style={{ marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>Saves</h2>
-        <div>
+        <div className="row">
           <input
             ref={fileRef}
             type="file"
@@ -54,6 +54,18 @@ export function SavesPanel({ server, onChanged }: { server: Server; onChanged: (
               e.target.value = '';
             }}
           />
+          <button
+            disabled={uploading}
+            title="Generate a fresh map (server must be stopped)"
+            onClick={async () => {
+              const name = prompt('New save name (server must be stopped):', 'my-save');
+              if (!name) return;
+              const ok = await run(() => api.createSave(server.id, name), 'Save created');
+              if (ok) await load();
+            }}
+          >
+            + New save
+          </button>
           <button className="primary" disabled={uploading} onClick={() => fileRef.current?.click()}>
             {uploading ? 'Uploading…' : 'Upload .zip'}
           </button>

@@ -1,4 +1,5 @@
 import Docker from 'dockerode';
+import { randomBytes } from 'node:crypto';
 import type { AppConfig } from '../config.js';
 import type { ServerRow } from '../db/models.js';
 import { DockerError } from '../lib/errors.js';
@@ -124,6 +125,56 @@ export class DockerService {
     } catch (err) {
       throw new DockerError(`createContainer failed: ${(err as Error).message}`);
     }
+  }
+
+  /**
+   * Run the Factorio binary once to completion in a throwaway container (used for
+   * offline operations like creating a save). The image entrypoint is overridden
+   * to invoke the binary directly with `args`, the server's data dir is bind-
+   * mounted at /factorio, no ports are published, and the container is removed
+   * afterwards. Returns the exit code and combined logs.
+   */
+  async runOneShot(
+    server: ServerRow,
+    hostDataDir: string,
+    args: string[],
+    timeoutMs = 120_000,
+  ): Promise<{ exitCode: number; logs: string }> {
+    const name = `${this.containerName(server.id)}-job-${randomBytes(4).toString('hex')}`;
+    let container: Docker.Container | undefined;
+    try {
+      container = await this.docker.createContainer({
+        name,
+        Image: this.config.factorioImage,
+        Entrypoint: ['/opt/factorio/bin/x64/factorio'],
+        Cmd: args,
+        Labels: { [MANAGED_LABEL]: 'true', [SERVER_ID_LABEL]: server.id },
+        HostConfig: {
+          Binds: [`${hostDataDir}:/factorio`],
+          AutoRemove: false,
+        },
+      });
+      await container.start();
+      const timer = setTimeout(() => void container?.stop({ t: 5 }).catch(() => {}), timeoutMs);
+      const result = (await container.wait()) as { StatusCode: number };
+      clearTimeout(timer);
+      const logs = await this.readContainerLogs(container);
+      return { exitCode: result.StatusCode, logs };
+    } catch (err) {
+      throw new DockerError(`one-shot job failed: ${(err as Error).message}`);
+    } finally {
+      if (container) await container.remove({ force: true, v: false }).catch(() => {});
+    }
+  }
+
+  private async readContainerLogs(container: Docker.Container): Promise<string> {
+    const buf = (await container.logs({
+      stdout: true,
+      stderr: true,
+      tail: 200,
+      follow: false,
+    })) as unknown as Buffer;
+    return stripDockerLogHeader(buf);
   }
 
   async start(serverId: string): Promise<void> {

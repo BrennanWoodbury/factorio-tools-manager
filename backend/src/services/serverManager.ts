@@ -7,8 +7,8 @@ import { PortAllocator } from './portAllocator.js';
 import { DockerService } from './dockerService.js';
 import { DnsService } from './dnsService.js';
 import { RconService } from './rconService.js';
-import { serverFiles, type ModEntry } from './serverFiles.js';
-import { DuplicateSubdomainError, NotFoundError, ValidationError } from '../lib/errors.js';
+import { serverFiles, sanitizeName, type ModEntry } from './serverFiles.js';
+import { DockerError, DuplicateSubdomainError, NotFoundError, ValidationError } from '../lib/errors.js';
 
 export interface CreateServerInput {
   name: string;
@@ -199,6 +199,32 @@ export class ServerManager {
     const containerId = await this.docker.createContainer(row, serverFiles.hostDir(id));
     await this.docker.start(id);
     this.repo.setStatus(id, 'running', containerId);
+  }
+
+  /**
+   * Create a new named save offline (server must be stopped). Runs the Factorio
+   * binary once in a throwaway container with `--create`. Throws with the job's
+   * log tail if generation fails.
+   */
+  async createSave(id: string, saveName: string): Promise<{ name: string }> {
+    const row = this.get(id);
+    const name = sanitizeName(saveName);
+    const cs = await this.docker.status(id);
+    if (cs.running) {
+      throw new ValidationError('Stop the server before creating a save');
+    }
+    if (serverFiles.saveExists(id, name)) {
+      throw new ValidationError(`A save named "${name}" already exists`);
+    }
+    serverFiles.ensureDirs(id);
+    const { exitCode, logs } = await this.docker.runOneShot(row, serverFiles.hostDir(id), [
+      '--create',
+      `/factorio/saves/${name}.zip`,
+    ]);
+    if (exitCode !== 0 || !serverFiles.saveExists(id, name)) {
+      throw new DockerError(`save generation failed (exit ${exitCode}): ${logs.slice(-500)}`);
+    }
+    return { name };
   }
 
   async stop(id: string): Promise<void> {

@@ -176,6 +176,15 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  r.post(
+    '/:id/saves/create',
+    asyncHandler(async (req, res) => {
+      const body = parse(z.object({ name: z.string().min(1).max(100) }), req.body);
+      const result = await manager.createSave(req.params.id, body.name);
+      res.status(201).json({ ...result, saves: serverFiles.listSaves(req.params.id) });
+    }),
+  );
+
   r.get(
     '/:id/saves/:name/download',
     asyncHandler(async (req, res) => {
