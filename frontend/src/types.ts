@@ -13,6 +13,7 @@ export interface Server {
   status: string;
   createdAt: string;
   updatedAt: string;
+  appliedModpackId: string | null;
   connectHost?: string;
 }
 
@@ -46,6 +47,34 @@ export interface CatalogEntry {
   category: string;
   latestVersion?: string;
   factorioVersion?: string;
+}
+
+export interface Modpack {
+  id: string;
+  name: string;
+  description: string;
+  factorioVersion: string;
+  modCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ModpackMod {
+  name: string;
+  enabled: boolean;
+  version: string | null;
+}
+
+export interface ModpackDetail {
+  pack: Modpack;
+  mods: ModpackMod[];
+  usedBy: { id: string; name: string }[];
+}
+
+export interface ApplyResult {
+  serverId: string;
+  downloaded: { name: string; version: string }[];
+  errors: { name: string; error: string }[];
 }
 
 export interface SystemStatus {

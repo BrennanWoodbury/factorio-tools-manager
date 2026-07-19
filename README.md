@@ -120,10 +120,18 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Lifecycle:** start / stop / restart / delete. Delete removes the container, DNS record,
   releases the ports and deletes the data dir.
 - **Console:** live RCON console + player list (over loopback / Docker network only).
-- **Saves:** upload a `.zip`, list, pick which to load next, download, delete.
-- **Mods:** search the Factorio Mod Portal by keyword and add mods to the list with one click (no
-  need to know the exact internal name); edit/enable/disable entries. With mod-portal credentials,
-  enabled mods are downloaded on save. Changes apply on next start.
+- **Saves:** upload a `.zip`, list, create a new named save on demand (offline, via a one-shot
+  container), pick which to load next, download, delete.
+- **Server settings:** edit the full `server-settings.json` (visibility, game password, autosave,
+  `allow_commands`, AFK kick, pause rules, …) via a structured form plus a raw-JSON escape hatch.
+- **Mods:** search the Factorio Mod Portal by keyword and add mods with one click; upload a mod
+  `.zip` manually; enable/disable; update all to latest; delete all; export a shareable manifest.
+  With mod-portal credentials, enabled mods are downloaded on save. Changes apply on next start.
+- **Modpacks (shared registry):** build named, reusable mod collections once and **apply them to
+  any server** (packs are manifests only — no binaries or credentials; each server downloads the
+  mods with its own credentials). Create a pack from scratch, snapshot one from a server, or
+  **import/export** a pack as a JSON manifest to share it. Editing a pack doesn't auto-change
+  servers; re-apply is explicit ("re-apply to all N servers using this pack").
 
 ### Mods: why the Mod Portal API (not `UPDATE_MODS_ON_START`)
 
@@ -195,9 +203,14 @@ for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id)
 | POST | `/servers/:id/{start,stop,restart}` | lifecycle |
 | GET | `/servers/:id/status` | live state + players |
 | GET | `/servers/:id/logs` | container logs |
-| GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / select / download / delete |
+| GET/PUT | `/servers/:id/settings` | full server-settings.json body |
+| GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / create / select / download / delete |
 | GET/PUT | `/servers/:id/mods` | get / apply mod list |
+| POST | `/servers/:id/mods/{upload,update,deleteAll}` · GET `/mods/export` | mod ops |
 | GET | `/mods/search?q=` | search the mod portal catalog |
+| GET/POST | `/modpacks` · `/modpacks/import` · `/modpacks/from-server` | list / create / import / snapshot |
+| GET/PATCH/DELETE | `/modpacks/:id` | detail / update / delete |
+| PUT/POST/GET | `/modpacks/:id/{mods,apply,apply-all,export}` | edit / apply / re-apply / export |
 | POST | `/servers/:id/rcon` | run an RCON command |
 
 ---

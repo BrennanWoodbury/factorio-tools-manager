@@ -1,4 +1,15 @@
-import type { CatalogEntry, ModEntry, SaveInfo, Server, ServerStatus, SystemStatus } from './types';
+import type {
+  ApplyResult,
+  CatalogEntry,
+  ModEntry,
+  Modpack,
+  ModpackDetail,
+  ModpackMod,
+  SaveInfo,
+  Server,
+  ServerStatus,
+  SystemStatus,
+} from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -93,6 +104,25 @@ export const api = {
 
   searchMods: (q: string, limit = 25) =>
     req<{ results: CatalogEntry[] }>('GET', `/mods/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+
+  // modpacks
+  listModpacks: () => req<{ modpacks: Modpack[] }>('GET', '/modpacks'),
+  getModpack: (id: string) => req<ModpackDetail>('GET', `/modpacks/${id}`),
+  createModpack: (name: string, description?: string) =>
+    req<ModpackDetail>('POST', '/modpacks', { name, description }),
+  createModpackFromServer: (serverId: string, name: string) =>
+    req<ModpackDetail>('POST', '/modpacks/from-server', { serverId, name }),
+  importModpack: (manifest: unknown) => req<ModpackDetail>('POST', '/modpacks/import', { manifest }),
+  updateModpack: (id: string, fields: { name?: string; description?: string }) =>
+    req<{ pack: Modpack }>('PATCH', `/modpacks/${id}`, fields),
+  deleteModpack: (id: string) => req<void>('DELETE', `/modpacks/${id}`),
+  setModpackMods: (id: string, mods: ModpackMod[]) =>
+    req<{ mods: ModpackMod[] }>('PUT', `/modpacks/${id}/mods`, { mods }),
+  applyModpack: (id: string, serverId: string) =>
+    req<ApplyResult>('POST', `/modpacks/${id}/apply`, { serverId }),
+  applyModpackToAll: (id: string) =>
+    req<{ results: ApplyResult[] }>('POST', `/modpacks/${id}/apply-all`),
+  exportModpackUrl: (id: string) => `/api/modpacks/${id}/export`,
 
   deleteAllMods: (id: string) => req<{ mods: ModEntry[] }>('POST', `/servers/${id}/mods/deleteAll`),
   updateMods: (id: string) =>

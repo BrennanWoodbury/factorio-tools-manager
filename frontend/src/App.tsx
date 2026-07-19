@@ -3,11 +3,17 @@ import { api, ApiError } from './api';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { ServerDetail } from './components/ServerDetail';
+import { ModpacksView } from './components/ModpacksView';
+import { ModpackDetail } from './components/ModpackDetail';
 import { Toaster } from './ui';
+
+type Tab = 'servers' | 'modpacks';
 
 export function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('servers');
+  const [selectedServer, setSelectedServer] = useState<string | null>(null);
+  const [selectedPack, setSelectedPack] = useState<string | null>(null);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -35,33 +41,50 @@ export function App() {
     );
   }
 
+  const go = (t: Tab) => {
+    setTab(t);
+    setSelectedServer(null);
+    setSelectedPack(null);
+  };
+
   return (
     <>
       <header className="app-header">
-        <div
-          className="brand"
-          style={{ cursor: 'pointer' }}
-          onClick={() => setSelectedId(null)}
-        >
+        <div className="brand" style={{ cursor: 'pointer' }} onClick={() => go('servers')}>
           <span style={{ fontSize: 22 }}>🏭</span>
           <h1>Factorio Server Manager</h1>
         </div>
-        <button
-          className="ghost"
-          onClick={async () => {
-            await api.logout();
-            setAuthed(false);
-          }}
-        >
-          Log out
-        </button>
+        <div className="row" style={{ alignItems: 'center' }}>
+          <button className={tab === 'servers' ? 'primary' : 'ghost'} onClick={() => go('servers')}>
+            Servers
+          </button>
+          <button className={tab === 'modpacks' ? 'primary' : 'ghost'} onClick={() => go('modpacks')}>
+            Modpacks
+          </button>
+          <button
+            className="ghost"
+            onClick={async () => {
+              await api.logout();
+              setAuthed(false);
+            }}
+          >
+            Log out
+          </button>
+        </div>
       </header>
       <div className="container">
-        {selectedId ? (
-          <ServerDetail id={selectedId} onBack={() => setSelectedId(null)} />
-        ) : (
-          <Dashboard onOpen={setSelectedId} />
-        )}
+        {tab === 'servers' &&
+          (selectedServer ? (
+            <ServerDetail id={selectedServer} onBack={() => setSelectedServer(null)} />
+          ) : (
+            <Dashboard onOpen={setSelectedServer} />
+          ))}
+        {tab === 'modpacks' &&
+          (selectedPack ? (
+            <ModpackDetail id={selectedPack} onBack={() => setSelectedPack(null)} />
+          ) : (
+            <ModpacksView onOpen={setSelectedPack} />
+          ))}
       </div>
       <Toaster />
     </>
