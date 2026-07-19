@@ -77,6 +77,25 @@ export class ServersRepo {
       .run({ ...fields, id } as unknown as NamedParams);
   }
 
+  setSettingsJson(id: string, json: string): void {
+    this.db
+      .prepare("UPDATE servers SET settings_json = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(json, id);
+  }
+
+  setAppliedModpack(id: string, modpackId: string | null): void {
+    this.db
+      .prepare("UPDATE servers SET applied_modpack_id = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(modpackId, id);
+  }
+
+  /** Servers currently marked as using a given modpack (for re-apply UI). */
+  listByModpack(modpackId: string): ServerRow[] {
+    return this.db
+      .prepare<ServerRow>('SELECT * FROM servers WHERE applied_modpack_id = ?')
+      .all(modpackId);
+  }
+
   delete(id: string): void {
     // port_allocations and dns_records cascade via FK ON DELETE CASCADE.
     this.db.prepare('DELETE FROM servers WHERE id = ?').run(id);

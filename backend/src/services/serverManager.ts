@@ -171,6 +171,24 @@ export class ServerManager {
     return updated;
   }
 
+  /** The effective advanced server-settings (defaults filled, managed keys stripped). */
+  getSettings(id: string): Record<string, unknown> {
+    return serverFiles.getAdvancedSettings(this.get(id));
+  }
+
+  /**
+   * Replace a server's advanced server-settings. Managed keys (name/description/
+   * max_players) are stripped — those are edited via the basic form/update() — so
+   * there's no drift between the two. Applies to the game on next start.
+   */
+  updateSettings(id: string, advanced: Record<string, unknown>): Record<string, unknown> {
+    this.get(id); // 404 if unknown
+    const clean = { ...advanced };
+    for (const k of ['name', 'description', 'max_players']) delete clean[k];
+    this.repo.setSettingsJson(id, JSON.stringify(clean));
+    return serverFiles.getAdvancedSettings(this.get(id));
+  }
+
   async start(id: string): Promise<void> {
     const row = this.get(id);
     await this.docker.ensureNetwork();

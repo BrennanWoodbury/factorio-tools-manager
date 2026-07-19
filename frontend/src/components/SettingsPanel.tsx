@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import type { Server } from '../types';
 import { run } from '../ui';
+import { AdvancedSettings } from './AdvancedSettings';
 
 export function SettingsPanel({
   server,
@@ -74,6 +75,8 @@ export function SettingsPanel({
           </span>
         </div>
       </div>
+
+      <AdvancedSettings serverId={server.id} />
 
       <div className="panel" style={{ borderColor: 'var(--red)' }}>
         <h2 style={{ color: 'var(--red)' }}>Danger zone</h2>

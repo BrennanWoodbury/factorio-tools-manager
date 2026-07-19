@@ -53,14 +53,17 @@ export class ServerFilesService {
     fs.rmSync(this.localDir(serverId), { recursive: true, force: true });
   }
 
-  /** Write server-settings.json from the server row. Called before each start. */
-  writeServerSettings(server: ServerRow): void {
-    this.ensureDirs(server.id);
-    const settings = {
-      name: server.name,
-      description: server.description,
+  /**
+   * The three fields the manager keeps on the server row (edited via the basic
+   * settings form). They are ALWAYS overlaid onto the advanced settings at write
+   * time, so there is exactly one source of truth per field and no drift.
+   */
+  static readonly MANAGED_KEYS = ['name', 'description', 'max_players'] as const;
+
+  /** Advanced server-settings defaults (everything except the managed keys). */
+  defaultAdvancedSettings(): Record<string, unknown> {
+    return {
       tags: ['factorio-manager'],
-      max_players: server.max_players,
       visibility: { public: false, lan: true },
       require_user_verification: true,
       max_upload_in_kilobytes_per_second: 0,
@@ -75,9 +78,39 @@ export class ServerFilesService {
       only_admins_can_pause_the_game: true,
       autosave_only_on_server: true,
     };
+  }
+
+  /** Stored advanced settings for a server (defaults filled), managed keys removed. */
+  getAdvancedSettings(server: ServerRow): Record<string, unknown> {
+    let stored: Record<string, unknown> = {};
+    if (server.settings_json) {
+      try {
+        stored = JSON.parse(server.settings_json) as Record<string, unknown>;
+      } catch {
+        stored = {};
+      }
+    }
+    const merged = { ...this.defaultAdvancedSettings(), ...stored };
+    for (const k of ServerFilesService.MANAGED_KEYS) delete merged[k];
+    return merged;
+  }
+
+  /** The effective server-settings.json body: advanced ⊕ managed row fields. */
+  effectiveSettings(server: ServerRow): Record<string, unknown> {
+    return {
+      ...this.getAdvancedSettings(server),
+      name: server.name,
+      description: server.description,
+      max_players: server.max_players,
+    };
+  }
+
+  /** Write server-settings.json from the server row. Called before each start. */
+  writeServerSettings(server: ServerRow): void {
+    this.ensureDirs(server.id);
     fs.writeFileSync(
       path.join(this.configDir(server.id), 'server-settings.json'),
-      JSON.stringify(settings, null, 2),
+      JSON.stringify(this.effectiveSettings(server), null, 2),
     );
   }
 

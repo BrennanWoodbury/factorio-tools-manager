@@ -135,6 +135,24 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  // ---- Advanced server settings (full server-settings.json body) ----
+
+  r.get(
+    '/:id/settings',
+    asyncHandler(async (req, res) => {
+      res.json({ settings: manager.getSettings(req.params.id) });
+    }),
+  );
+
+  r.put(
+    '/:id/settings',
+    asyncHandler(async (req, res) => {
+      const body = parse(z.object({ settings: z.record(z.string(), z.unknown()) }), req.body);
+      const settings = manager.updateSettings(req.params.id, body.settings);
+      res.json({ settings });
+    }),
+  );
+
   // ---- Saves ----
 
   r.get(

@@ -43,6 +43,11 @@ export const api = {
   updateServer: (id: string, input: Record<string, unknown>) =>
     req<{ server: Server }>('PATCH', `/servers/${id}`, input),
   deleteServer: (id: string) => req<void>('DELETE', `/servers/${id}`),
+  getSettings: (id: string) =>
+    req<{ settings: Record<string, unknown> }>('GET', `/servers/${id}/settings`),
+  updateSettings: (id: string, settings: Record<string, unknown>) =>
+    req<{ settings: Record<string, unknown> }>('PUT', `/servers/${id}/settings`, { settings }),
+
   start: (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/start`),
   stop: (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/stop`),
   restart: (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/restart`),
