@@ -239,6 +239,46 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  r.post(
+    '/:id/mods/upload',
+    upload.single('file'),
+    asyncHandler(async (req, res) => {
+      const row = manager.get(req.params.id);
+      if (!req.file) throw new ValidationError('Expected a multipart file field named "file"');
+      const result = mods.uploadModZip(row.id, req.file.buffer);
+      res.status(201).json({ ...result, mods: mods.getModList(row.id) });
+    }),
+  );
+
+  r.post(
+    '/:id/mods/deleteAll',
+    asyncHandler(async (req, res) => {
+      const row = manager.get(req.params.id);
+      mods.deleteAllMods(row.id);
+      res.json({ mods: mods.getModList(row.id) });
+    }),
+  );
+
+  r.post(
+    '/:id/mods/update',
+    asyncHandler(async (req, res) => {
+      const row = manager.get(req.params.id);
+      const result = await mods.updateAll(row);
+      res.json({ mods: mods.getModList(row.id), ...result });
+    }),
+  );
+
+  r.get(
+    '/:id/mods/export',
+    asyncHandler(async (req, res) => {
+      const row = manager.get(req.params.id);
+      const manifest = mods.exportManifest(row.id);
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${row.subdomain}-mods.json"`);
+      res.send(JSON.stringify(manifest, null, 2));
+    }),
+  );
+
   // ---- RCON ----
 
   r.post(

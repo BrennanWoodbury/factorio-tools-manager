@@ -18,6 +18,7 @@ export function ModsPanel({ server }: { server: Server }) {
   const [results, setResults] = useState<CatalogEntry[]>([]);
   const [searching, setSearching] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -84,9 +85,65 @@ export function ModsPanel({ server }: { server: Server }) {
     <div className="panel">
       <div className="spread" style={{ marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>Mods</h2>
-        <button className="primary" disabled={saving} onClick={() => void run(save)}>
-          {saving ? 'Applying…' : 'Save & download'}
-        </button>
+        <div className="row">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".zip"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              const ok = await run(() => api.uploadMod(server.id, f), 'Mod uploaded');
+              if (ok) await load();
+            }}
+          />
+          <button onClick={() => fileRef.current?.click()} title="Upload a mod .zip">
+            Upload .zip
+          </button>
+          <button
+            onClick={async () => {
+              const r = await api.updateMods(server.id).catch((err) => {
+                toastError((err as Error).message);
+                return null;
+              });
+              if (r) {
+                setMods(r.mods);
+                toastSuccess(
+                  r.updated.length
+                    ? `Updated: ${r.updated.map((u) => `${u.name}@${u.version}`).join(', ')}`
+                    : 'Nothing to update',
+                );
+              }
+            }}
+            title="Re-download the latest release of every enabled mod"
+          >
+            Update all
+          </button>
+          <a href={api.exportModsUrl(server.id)}>
+            <button title="Download a shareable manifest">Export</button>
+          </a>
+          <button
+            className="danger"
+            onClick={async () => {
+              if (!confirm('Remove ALL mods (reset to base only)?')) return;
+              const r = await api.deleteAllMods(server.id).catch((err) => {
+                toastError((err as Error).message);
+                return null;
+              });
+              if (r) {
+                setMods(r.mods);
+                toastSuccess('All mods removed');
+              }
+            }}
+          >
+            Delete all
+          </button>
+          <button className="primary" disabled={saving} onClick={() => void run(save)}>
+            {saving ? 'Applying…' : 'Save & download'}
+          </button>
+        </div>
       </div>
 
       {!server.hasModPortalCredentials && (

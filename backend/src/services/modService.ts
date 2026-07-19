@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import AdmZip from 'adm-zip';
 import type { ServerRow } from '../db/models.js';
 import { AppError, ValidationError } from '../lib/errors.js';
 import { serverFiles, type ModEntry } from './serverFiles.js';
@@ -225,6 +226,82 @@ export class ModService {
 
   getModList(serverId: string): ModEntry[] {
     return serverFiles.readModList(serverId);
+  }
+
+  /**
+   * Install a mod from an uploaded .zip. Reads the real name+version from the
+   * zip's info.json (rather than trusting the filename), stores it as
+   * `<name>_<version>.zip`, removes older versions of the same mod, and adds it
+   * to mod-list.json enabled.
+   */
+  uploadModZip(serverId: string, data: Buffer): { name: string; version: string } {
+    let name: string;
+    let version: string;
+    try {
+      const zip = new AdmZip(data);
+      // Mod zips contain `<name>_<version>/info.json`; pick the shallowest info.json.
+      const infoEntry = zip
+        .getEntries()
+        .filter((e) => e.entryName.endsWith('/info.json') || e.entryName === 'info.json')
+        .sort((a, b) => a.entryName.split('/').length - b.entryName.split('/').length)[0];
+      if (!infoEntry) throw new Error('no info.json inside zip');
+      const info = JSON.parse(infoEntry.getData().toString('utf8')) as {
+        name?: string;
+        version?: string;
+      };
+      if (!info.name || !info.version) throw new Error('info.json missing name/version');
+      name = info.name;
+      version = info.version;
+    } catch (err) {
+      throw new ValidationError(`Not a valid Factorio mod zip: ${(err as Error).message}`);
+    }
+
+    const modsDir = serverFiles.modsDir(serverId);
+    fs.mkdirSync(modsDir, { recursive: true });
+    for (const f of fs.readdirSync(modsDir)) {
+      if (f.endsWith('.zip') && f.startsWith(`${name}_`)) fs.rmSync(path.join(modsDir, f));
+    }
+    fs.writeFileSync(path.join(modsDir, `${name}_${version}.zip`), data);
+
+    const list = serverFiles.readModList(serverId);
+    if (!list.some((m) => m.name === name)) list.push({ name, enabled: true });
+    serverFiles.writeModList(serverId, list);
+    return { name, version };
+  }
+
+  /** Reset a server's mods to just `base` and delete all downloaded zips. */
+  deleteAllMods(serverId: string): void {
+    const modsDir = serverFiles.modsDir(serverId);
+    if (fs.existsSync(modsDir)) {
+      for (const f of fs.readdirSync(modsDir)) {
+        if (f.endsWith('.zip')) fs.rmSync(path.join(modsDir, f));
+      }
+    }
+    serverFiles.writeModList(serverId, [{ name: 'base', enabled: true }]);
+  }
+
+  /** Re-download the latest release of every enabled non-base mod. */
+  async updateAll(
+    server: ServerRow,
+  ): Promise<{ updated: { name: string; version: string }[]; errors: { name: string; error: string }[] }> {
+    const updated: { name: string; version: string }[] = [];
+    const errors: { name: string; error: string }[] = [];
+    for (const entry of serverFiles.readModList(server.id)) {
+      if (!entry.enabled || entry.name === 'base') continue;
+      try {
+        // Force latest: ignore any pin.
+        const version = await this.downloadMod(server, entry.name);
+        updated.push({ name: entry.name, version });
+      } catch (err) {
+        errors.push({ name: entry.name, error: (err as Error).message });
+      }
+    }
+    return { updated, errors };
+  }
+
+  /** Export a shareable manifest of a server's mod list (names + enabled flags). */
+  exportManifest(serverId: string): { mods: ModEntry[] } {
+    return { mods: serverFiles.readModList(serverId) };
   }
 }
 

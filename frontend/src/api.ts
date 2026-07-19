@@ -94,6 +94,30 @@ export const api = {
   searchMods: (q: string, limit = 25) =>
     req<{ results: CatalogEntry[] }>('GET', `/mods/search?q=${encodeURIComponent(q)}&limit=${limit}`),
 
+  deleteAllMods: (id: string) => req<{ mods: ModEntry[] }>('POST', `/servers/${id}/mods/deleteAll`),
+  updateMods: (id: string) =>
+    req<{
+      mods: ModEntry[];
+      updated: { name: string; version: string }[];
+      errors: { name: string; error: string }[];
+    }>('POST', `/servers/${id}/mods/update`),
+  uploadMod: async (id: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`/api/servers/${id}/mods/upload`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      const err = (json as { error?: { code: string; message: string } })?.error;
+      throw new ApiError(err?.message ?? `HTTP ${res.status}`, err?.code ?? 'ERROR', res.status);
+    }
+    return json as { name: string; version: string; mods: ModEntry[] };
+  },
+  exportModsUrl: (id: string) => `/api/servers/${id}/mods/export`,
+
   // rcon
   rcon: (id: string, command: string) =>
     req<{ response: string }>('POST', `/servers/${id}/rcon`, { command }),
