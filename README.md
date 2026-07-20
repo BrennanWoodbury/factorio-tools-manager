@@ -148,11 +148,28 @@ downloads that mod's latest release only.
 
 ## Local development
 
+### Option 1 — Dev stack in containers (hot reload)
+
+The easiest path — nothing to install on the host:
+
 ```bash
-# Backend (serves API on :8080). RCON_MODE=loopback so it reaches published RCON ports.
+docker compose -f docker-compose.dev.yml up   # run from the repo root
+```
+
+Both services run from bind-mounted source with live reload (backend via `tsx watch`,
+frontend via Vite HMR). The first `up` runs `npm install` into named volumes (slow once,
+fast after). The backend drives the host Docker daemon and joins `factorio-net`, so RCON
+works over the Docker network — same wiring as production. Open **http://localhost:5173**
+(default login `dev`). Run it from the repo root so `HOST_SERVERS_DIR` resolves correctly.
+
+### Option 2 — On the host (no containers)
+
+```bash
+# Backend (API on :8080). RCON_MODE=loopback so it reaches the published RCON ports.
+# NB: the backend reads env vars directly — it does NOT load .env; pass them inline.
 cd backend
 npm install
-ADMIN_PASSWORD=dev RCON_MODE=loopback DATA_DIR=./data npm run dev
+ADMIN_PASSWORD=dev RCON_MODE=loopback DATA_DIR=$PWD/data npm run dev
 
 # Frontend (Vite dev server on :5173, proxies /api → :8080)
 cd frontend

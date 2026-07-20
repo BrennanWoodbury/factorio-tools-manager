@@ -1,0 +1,72 @@
+# Development stack with hot reload.
+#
+#   docker compose -f docker-compose.dev.yml up        # run from the repo root
+#
+# Both services run the official node image directly (no build step): the source
+# is bind-mounted and dependencies live in named volumes, so the first `up` runs
+# `npm install` once (slow), then edits reload live — the backend via `tsx watch`,
+# the frontend via Vite HMR.
+#
+# The backend still creates the per-server Factorio containers on the HOST Docker
+# daemon (socket mounted) and joins `factorio-net`, so it reaches their RCON over
+# the Docker network (RCON_MODE=network) — same wiring as production.
+#
+# Open http://localhost:5173. DNS/DDNS is off unless you add the CLOUDFLARE_* vars,
+# so servers connect by IP:port (Factorio → Connect to address → localhost:<port>).
+
+services:
+  backend:
+    image: node:26-bookworm-slim
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-dev}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      DATA_DIR: /data
+      # Host path the Docker daemon uses to bind-mount each Factorio container's
+      # data dir. Must be a real host path — defaults to ./data/servers under the
+      # directory you run compose from (so run from the repo root).
+      HOST_SERVERS_DIR: ${PWD}/data/servers
+      FACTORIO_NETWORK: factorio-net
+      RCON_MODE: network
+      # If file changes aren't picked up on your filesystem, force polling:
+      # CHOKIDAR_USEPOLLING: "true"
+      #
+      # DNS automation (optional) — uncomment and fill to test the SRV/DDNS flow:
+      # CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      # CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
+      # BASE_DOMAIN: ${BASE_DOMAIN:-}
+      # HOST_RECORD_NAME: ${HOST_RECORD_NAME:-}
+    ports:
+      - "8080:8080" # API (handy for curl; the UI reaches it via the Vite proxy)
+    volumes:
+      - ./backend:/app
+      - backend_node_modules:/app/node_modules
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+    networks:
+      - factorio-net
+
+  frontend:
+    image: node:26-bookworm-slim
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev"
+    environment:
+      # Vite proxies /api to the backend service over the compose network.
+      VITE_API_TARGET: http://backend:8080
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+
+networks:
+  factorio-net:
+    name: factorio-net
+    driver: bridge
+
+volumes:
+  backend_node_modules:
+  frontend_node_modules:
