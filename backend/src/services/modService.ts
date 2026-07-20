@@ -43,6 +43,15 @@ interface PortalListEntry {
 const CATALOG_TTL_MS = 6 * 60 * 60 * 1000; // 6h
 
 /**
+ * Mods that ship with the game data and must NOT be downloaded from the mod
+ * portal: `base` (always) and the official Space Age expansion mods, which come
+ * bundled with the DLC. They can be enabled in mod-list.json but the manager
+ * never tries to fetch them (that would fail — they aren't standard portal
+ * downloads). The server uses the copies present in its own game data.
+ */
+export const BUNDLED_MODS = new Set(['base', 'space-age', 'quality', 'elevated-rails']);
+
+/**
  * Mod management via the Factorio Mod Portal API.
  *
  * Why the API rather than the image's UPDATE_MODS_ON_START:
@@ -213,7 +222,7 @@ export class ModService {
     const downloaded: { name: string; version: string }[] = [];
     const errors: { name: string; error: string }[] = [];
     for (const entry of entries) {
-      if (!entry.enabled || entry.name === 'base') continue;
+      if (!entry.enabled || BUNDLED_MODS.has(entry.name)) continue;
       try {
         const version = await this.downloadMod(server, entry.name, entry.version);
         downloaded.push({ name: entry.name, version });
@@ -287,7 +296,7 @@ export class ModService {
     const updated: { name: string; version: string }[] = [];
     const errors: { name: string; error: string }[] = [];
     for (const entry of serverFiles.readModList(server.id)) {
-      if (!entry.enabled || entry.name === 'base') continue;
+      if (!entry.enabled || BUNDLED_MODS.has(entry.name)) continue;
       try {
         // Force latest: ignore any pin.
         const version = await this.downloadMod(server, entry.name);

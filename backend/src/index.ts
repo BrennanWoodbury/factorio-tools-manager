@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { buildContext } from './context.js';
+import { kvGet, kvSet } from './db/index.js';
 import { authRouter } from './routes/auth.js';
 import { serversRouter } from './routes/servers.js';
 import { modsRouter } from './routes/mods.js';
@@ -28,6 +29,17 @@ async function main() {
     }
   } catch (err) {
     console.warn(`[startup] status reconcile skipped: ${(err as Error).message}`);
+  }
+
+  // Seed the built-in "Space Age" modpack once. The kv guard means a user who
+  // deletes it won't have it recreated on the next restart.
+  if (kvGet(ctx.db, 'default_modpacks_seeded') !== '1') {
+    try {
+      ctx.modpacks.seedSpaceAge();
+    } catch (err) {
+      console.warn(`[startup] modpack seed skipped: ${(err as Error).message}`);
+    }
+    kvSet(ctx.db, 'default_modpacks_seeded', '1');
   }
 
   ctx.ddns.start();

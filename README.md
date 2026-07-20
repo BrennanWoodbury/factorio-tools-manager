@@ -132,7 +132,10 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   any server** (packs are manifests only — no binaries or credentials; each server downloads the
   mods with its own credentials). Create a pack from scratch, snapshot one from a server, or
   **import/export** a pack as a JSON manifest to share it. Editing a pack doesn't auto-change
-  servers; re-apply is explicit ("re-apply to all N servers using this pack").
+  servers; re-apply is explicit ("re-apply to all N servers using this pack"). A built-in
+  **"Space Age"** modpack (`space-age` / `quality` / `elevated-rails`) is seeded on first run;
+  those official expansion mods ship with the game data (they need the Space Age DLC) and are
+  never downloaded from the portal — the manager just enables them in `mod-list.json`.
 
 ### Mods: why the Mod Portal API (not `UPDATE_MODS_ON_START`)
 

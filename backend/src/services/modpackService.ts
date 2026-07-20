@@ -10,6 +10,18 @@ export interface ModpackModDto {
   enabled: boolean;
   version: string | null;
 }
+
+/** The official Factorio Space Age expansion mods (ship with the DLC). */
+export const SPACE_AGE_PACK = {
+  name: 'Space Age',
+  description:
+    'Factorio Space Age expansion. Enables the official space-age, quality and elevated-rails mods. Requires the Space Age DLC in the server’s game data — these mods ship with the game and are not downloaded from the mod portal.',
+  mods: [
+    { name: 'space-age', enabled: true, version: null },
+    { name: 'quality', enabled: true, version: null },
+    { name: 'elevated-rails', enabled: true, version: null },
+  ] as ModpackModDto[],
+};
 export interface ModpackDto {
   id: string;
   name: string;
@@ -180,6 +192,17 @@ export class ModpackService {
       factorioVersion: row.factorio_version,
       mods: this.modsDto(id),
     };
+  }
+
+  /**
+   * Seed the built-in "Space Age" modpack. Idempotent by name — if a pack named
+   * "Space Age" already exists (or the caller has seeded before), it does nothing,
+   * so a user who deletes it won't have it reappear (see the kv guard in startup).
+   */
+  seedSpaceAge(): void {
+    if (this.repo.getByName(SPACE_AGE_PACK.name)) return;
+    const pack = this.create({ name: SPACE_AGE_PACK.name, description: SPACE_AGE_PACK.description });
+    this.repo.replaceMods(pack.id, SPACE_AGE_PACK.mods);
   }
 
   /** Create a pack from an exported manifest (name auto-deduped on clash). */
