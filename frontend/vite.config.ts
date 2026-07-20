@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     // Bind 0.0.0.0 so the dev server is reachable when running in a container.
     host: true,
-    port: 5173,
+    port: Number(process.env.VITE_PORT) || 5173,
     proxy: {
       '/api': {
         // In docker-compose.dev.yml this points at the backend service; on the

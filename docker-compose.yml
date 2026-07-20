@@ -12,8 +12,9 @@ services:
     container_name: factorio-manager
     restart: unless-stopped
     ports:
-      # Web UI + API. Put a TLS reverse proxy in front of this in production.
-      - "8080:8080"
+      # Web UI + API on the host. Change the host side via WEB_PORT (the container
+      # always listens on 8080). Put a TLS reverse proxy in front in production.
+      - "${WEB_PORT:-8080}:8080"
     environment:
       # --- Auth (required) ---
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}

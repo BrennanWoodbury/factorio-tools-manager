@@ -95,6 +95,7 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 | Variable                | Required | Default                        | Meaning |
 | ----------------------- | -------- | ------------------------------ | ------- |
 | `ADMIN_PASSWORD`        | ✅       | —                              | Web UI login password |
+| `WEB_PORT`              |          | `8080` (prod) / `5173` (dev)   | Host port for the web UI; `API_PORT` (dev only) for the backend |
 | `JWT_SECRET`            |          | derived                        | Signs session cookies; set your own (`openssl rand -hex 32`) |
 | `HOST_SERVERS_DIR`      | ✅ (docker) | —                           | Absolute **host** path to `./data/servers` |
 | `DATA_DIR`              |          | `/data`                        | Where the SQLite DB + server data live (in-container) |
