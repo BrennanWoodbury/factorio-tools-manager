@@ -22,6 +22,9 @@ const createSchema = z.object({
   factorioTag: z.string().max(128).optional(),
   autoRestart: z.boolean().optional(),
   mods: z.array(modEntrySchema).optional(),
+  // Initial map generation: raw settings, or a template id to copy settings from.
+  mapGen: z.record(z.string(), z.unknown()).optional(),
+  mapGenTemplateId: z.string().min(1).optional(),
 });
 
 const updateSchema = z.object({
@@ -66,7 +69,9 @@ export function serversRouter(ctx: AppContext): Router {
   r.post(
     '/',
     asyncHandler(async (req, res) => {
-      const input = parse(createSchema, req.body);
+      const { mapGenTemplateId, ...input } = parse(createSchema, req.body);
+      // A chosen template supplies the initial map-gen settings (copied, not linked).
+      if (mapGenTemplateId) input.mapGen = ctx.mapGenTemplates.settingsOf(mapGenTemplateId);
       const row = await manager.create(input);
       res.status(201).json({ server: dtoOf(row) });
     }),

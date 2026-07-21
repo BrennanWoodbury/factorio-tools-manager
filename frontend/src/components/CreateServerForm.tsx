@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { api } from '../api';
+import type { MapGenSettings } from '../types';
 import { toastError, toastSuccess } from '../ui';
 import { FactorioTagSelect } from './FactorioTagSelect';
+import { MapGenEditor } from './MapGenEditor';
 
 export function CreateServerForm({
   onClose,
@@ -19,7 +21,19 @@ export function CreateServerForm({
   const [modUser, setModUser] = useState('');
   const [modToken, setModToken] = useState('');
   const [factorioTag, setFactorioTag] = useState('stable');
+  const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Populate the map-gen editor with defaults the first time it's expanded, so an
+  // untouched wizard still creates a server on the image's default generation.
+  const initMapGen = async () => {
+    if (mapGen) return;
+    try {
+      setMapGen((await api.mapGenDefaults()).settings);
+    } catch (err) {
+      toastError((err as Error).message);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +48,7 @@ export function CreateServerForm({
         factorioUsername: modUser || undefined,
         factorioToken: modToken || undefined,
         factorioTag: factorioTag.trim() || undefined,
+        mapGen: mapGen ?? undefined,
       });
       toastSuccess(`Created "${server.name}"`);
       onCreated(server.id);
@@ -107,6 +122,21 @@ export function CreateServerForm({
           <input value={modUser} onChange={(e) => setModUser(e.target.value)} />
           <label>Factorio.com token</label>
           <input value={modToken} onChange={(e) => setModToken(e.target.value)} type="password" />
+        </details>
+
+        <details style={{ marginTop: 12 }} onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) void initMapGen(); }}>
+          <summary className="muted" style={{ cursor: 'pointer' }}>
+            Map generation (optional — pick a template or tune ore/water/terrain)
+          </summary>
+          <div className="small muted" style={{ margin: '8px 0' }}>
+            Applied when this server generates its first map. Leave collapsed to use the game's
+            defaults. Load a saved <strong>template</strong> or adjust the sliders below.
+          </div>
+          {mapGen ? (
+            <MapGenEditor value={mapGen} onChange={setMapGen} />
+          ) : (
+            <div className="muted small">Loading defaults…</div>
+          )}
         </details>
 
         <div className="row" style={{ marginTop: 18, justifyContent: 'flex-end' }}>

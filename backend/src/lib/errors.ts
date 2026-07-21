@@ -28,6 +28,12 @@ export class DuplicateModpackError extends AppError {
   }
 }
 
+export class DuplicateMapGenTemplateError extends AppError {
+  constructor(name: string) {
+    super(`A map template named "${name}" already exists`, 409, 'DUPLICATE_MAP_TEMPLATE');
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(what = 'Resource') {
     super(`${what} not found`, 404, 'NOT_FOUND');

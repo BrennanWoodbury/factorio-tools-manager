@@ -82,4 +82,17 @@ CREATE TABLE IF NOT EXISTS modpack_mods (
   PRIMARY KEY (modpack_id, name),
   FOREIGN KEY (modpack_id) REFERENCES modpacks(id) ON DELETE CASCADE
 );
+
+-- Shared, reusable map-generation presets (a local registry). A template is just a
+-- named map-gen-settings.json object (ore/water/terrain sliders, etc.), selectable
+-- when creating a server and exportable/shareable as a JSON manifest. Holds no
+-- server reference — applying one copies its settings onto a server at create time.
+CREATE TABLE IF NOT EXISTS map_gen_templates (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL UNIQUE,
+  description   TEXT NOT NULL DEFAULT '',
+  settings_json TEXT NOT NULL,     -- the map-gen-settings.json object
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;

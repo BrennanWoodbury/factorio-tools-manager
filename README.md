@@ -135,13 +135,19 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Backups:** on-demand snapshots (kept under the server's `backups/` dir) plus **scheduled
   automatic backups** per server (toggle + interval + keep-newest-N). Backing up a running server
   forces a fresh save via RCON first. List, download, restore (into a save; server stopped), delete.
-- **Map generation:** a **Map gen** tab with the in-game map-generation sliders — resource
-  frequency/size/richness (iron, copper, coal, stone, uranium, oil), water, trees, enemy bases,
-  cliffs, starting-area size, peaceful mode and map seed. Written to `config/map-gen-settings.json`
-  only when you customize it, and applied to the **next new map generated** (first start with no
-  save, or a new save from the Saves tab); doesn't alter an existing world. `map-settings.json`
-  (pollution/evolution/expansion) is left to the image's version-matched example — Factorio
-  validates it strictly against the exact binary version, so a hand-written one isn't safe.
+- **Map generation:** the in-game map-generation sliders — resource frequency/size/richness (iron,
+  copper, coal, stone, uranium, oil), water, trees, enemy bases, cliffs, starting-area size,
+  peaceful mode and map seed — available **in the create-server wizard** and on a per-server **Map
+  gen** tab. Written to `config/map-gen-settings.json` only when you customize it, and applied to the
+  **next new map generated** (first start with no save, or a new save from the Saves tab); doesn't
+  alter an existing world. `map-settings.json` (pollution/evolution/expansion) is left to the image's
+  version-matched example — Factorio validates it strictly against the exact binary version, so a
+  hand-written one isn't safe.
+- **Map templates:** save a map-gen configuration as a named, reusable **template** (e.g. "all ores
+  at 300%") and pick it when creating a server. A template is just a JSON manifest + DB record — no
+  server link — that's **exportable/importable** for sharing. Managed under the **Templates** tab;
+  a couple ("Rich resources", "Peaceful") are seeded by default. "Save as template" is available
+  from any map-gen editor.
 - **Server settings:** edit the full `server-settings.json` (visibility, game password, autosave,
   `allow_commands`, AFK kick, pause rules, …) via a structured form plus a raw-JSON escape hatch.
 - **Auto-restart on change:** an optional per-server toggle — when on, saving a change that only
@@ -255,7 +261,9 @@ for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id)
 | GET | `/servers/:id/status` | live state + players |
 | GET | `/servers/:id/logs` | container logs |
 | GET/PUT | `/servers/:id/settings` | full server-settings.json body |
-| GET/PUT | `/servers/:id/mapgen` | map-gen-settings.json + map-settings.json (new-map generation) |
+| GET/PUT | `/servers/:id/mapgen` | this server's map-gen-settings (new-map generation) |
+| GET/POST/PATCH/DELETE | `/mapgen-templates[...]` | map-gen template registry (list/create/edit/delete) |
+| POST/GET | `/mapgen-templates/{import,from-server}` · `/:id/export` | import / snapshot / export a template |
 | GET/PUT | `/servers/:id/{whitelist,adminlist}` · `/global/{whitelist,adminlist}` | per-server / global whitelist + admin list |
 | GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / create / select / download / delete |
 | GET/POST/DELETE | `/servers/:id/backups[...]` | list / create / download / restore / delete |

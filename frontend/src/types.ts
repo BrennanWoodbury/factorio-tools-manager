@@ -29,6 +29,17 @@ export interface MapGen {
   mapGen: MapGenSettings;
 }
 
+export interface MapGenTemplate {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface MapGenTemplateDetail extends MapGenTemplate {
+  settings: MapGenSettings;
+}
+
 export interface BackupInfo {
   name: string;
   source: string;

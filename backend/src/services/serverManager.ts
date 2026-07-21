@@ -22,6 +22,8 @@ export interface CreateServerInput {
   factorioTag?: string;
   autoRestart?: boolean;
   mods?: ModEntry[];
+  /** Initial map-gen-settings for the server's first generated map (optional). */
+  mapGen?: Record<string, unknown>;
 }
 
 export interface UpdateServerInput {
@@ -128,7 +130,8 @@ export class ServerManager {
       auto_backup: 0,
       backup_interval_minutes: 60,
       backup_keep: 10,
-      map_gen_settings_json: null,
+      map_gen_settings_json:
+        input.mapGen && Object.keys(input.mapGen).length > 0 ? JSON.stringify(input.mapGen) : null,
       map_settings_json: null,
     };
 

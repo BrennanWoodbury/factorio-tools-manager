@@ -11,6 +11,7 @@ import { authRouter } from './routes/auth.js';
 import { serversRouter } from './routes/servers.js';
 import { modsRouter } from './routes/mods.js';
 import { modpacksRouter } from './routes/modpacks.js';
+import { mapGenTemplatesRouter } from './routes/mapGenTemplates.js';
 import { globalRouter } from './routes/global.js';
 import { systemRouter } from './routes/system.js';
 import { requireAuth } from './middleware/auth.js';
@@ -43,6 +44,16 @@ async function main() {
     kvSet(ctx.db, 'default_modpacks_seeded', '1');
   }
 
+  // Seed the built-in map-generation templates once (same delete-safe kv guard).
+  if (kvGet(ctx.db, 'default_map_templates_seeded') !== '1') {
+    try {
+      ctx.mapGenTemplates.seedDefaults();
+    } catch (err) {
+      console.warn(`[startup] map template seed skipped: ${(err as Error).message}`);
+    }
+    kvSet(ctx.db, 'default_map_templates_seeded', '1');
+  }
+
   ctx.ddns.start();
   ctx.backups.start();
 
@@ -58,6 +69,7 @@ async function main() {
   app.use('/api/servers', serversRouter(ctx));
   app.use('/api/mods', modsRouter(ctx));
   app.use('/api/modpacks', modpacksRouter(ctx));
+  app.use('/api/mapgen-templates', mapGenTemplatesRouter(ctx));
   app.use('/api/global', globalRouter(ctx));
   app.use('/api/system', systemRouter(ctx));
 

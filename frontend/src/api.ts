@@ -4,6 +4,8 @@ import type {
   CatalogEntry,
   DnsSettings,
   MapGen,
+  MapGenTemplate,
+  MapGenTemplateDetail,
   ModEntry,
   Modpack,
   ModpackDetail,
@@ -102,6 +104,23 @@ export const api = {
   getMapGen: (id: string) => req<MapGen>('GET', `/servers/${id}/mapgen`),
   setMapGen: (id: string, patch: { mapGen: Record<string, unknown> }) =>
     req<MapGen>('PUT', `/servers/${id}/mapgen`, patch),
+
+  // map-generation templates (shared presets)
+  mapGenDefaults: () => req<{ settings: Record<string, unknown> }>('GET', '/mapgen-templates/defaults'),
+  listMapGenTemplates: () => req<{ templates: MapGenTemplate[] }>('GET', '/mapgen-templates'),
+  getMapGenTemplate: (id: string) => req<MapGenTemplateDetail>('GET', `/mapgen-templates/${id}`),
+  createMapGenTemplate: (input: { name: string; description?: string; settings: Record<string, unknown> }) =>
+    req<MapGenTemplateDetail>('POST', '/mapgen-templates', input),
+  createMapGenTemplateFromServer: (serverId: string, name: string) =>
+    req<MapGenTemplateDetail>('POST', '/mapgen-templates/from-server', { serverId, name }),
+  updateMapGenTemplate: (
+    id: string,
+    fields: { name?: string; description?: string; settings?: Record<string, unknown> },
+  ) => req<MapGenTemplateDetail>('PATCH', `/mapgen-templates/${id}`, fields),
+  deleteMapGenTemplate: (id: string) => req<void>('DELETE', `/mapgen-templates/${id}`),
+  importMapGenTemplate: (manifest: unknown) =>
+    req<MapGenTemplateDetail>('POST', '/mapgen-templates/import', { manifest }),
+  exportMapGenTemplateUrl: (id: string) => `/api/mapgen-templates/${id}/export`,
 
   // backups
   listBackups: (id: string) => req<{ backups: BackupInfo[] }>('GET', `/servers/${id}/backups`),
