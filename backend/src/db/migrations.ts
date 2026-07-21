@@ -69,6 +69,13 @@ const MIGRATIONS: Migration[] = [
     // start is the union of the two (mirrors the whitelist).
     up: (db) => db.exec('ALTER TABLE servers ADD COLUMN adminlist_json TEXT'),
   },
+  {
+    version: 8,
+    // The user's intended run state ('running' | 'stopped'), set by start/stop and
+    // NOT overwritten by observed-status updates. On manager startup, servers whose
+    // desired_state is 'running' but whose container isn't are resumed.
+    up: (db) => db.exec("ALTER TABLE servers ADD COLUMN desired_state TEXT NOT NULL DEFAULT 'stopped'"),
+  },
 ];
 
 export function runMigrations(db: DB): void {

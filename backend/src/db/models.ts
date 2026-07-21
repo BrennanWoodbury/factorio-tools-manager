@@ -29,6 +29,8 @@ export interface ServerRow {
   auto_restart: number;
   /** Per-server admin list as a JSON string array. Migration v7. */
   adminlist_json: string | null;
+  /** User's intended run state: 'running' | 'stopped'. Migration v8. */
+  desired_state: string;
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */

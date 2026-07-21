@@ -74,6 +74,9 @@ export const config = {
   // don't kill running servers). Enable in production for a clean full shutdown.
   stopServersOnShutdown: opt('STOP_SERVERS_ON_SHUTDOWN', 'false') === 'true',
   shutdownStopTimeoutSecs: intOpt('SHUTDOWN_STOP_TIMEOUT_SECONDS', 30),
+  // On startup, resume servers that were running (desired_state='running') but
+  // whose container isn't. Default on.
+  resumeServersOnStartup: opt('RESUME_SERVERS_ON_STARTUP', 'true') !== 'false',
   // Absolute path to the servers data dir *as seen by the Docker daemon (the host)*.
   // When the manager runs in a container, its own DATA_DIR is a mount, but the
   // Factorio containers it spawns are bind-mounted from the host path. These can

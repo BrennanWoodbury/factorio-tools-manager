@@ -121,6 +121,7 @@ export class ServerManager {
       factorio_tag: this.cleanTag(input.factorioTag),
       auto_restart: input.autoRestart ? 1 : 0,
       adminlist_json: null,
+      desired_state: 'stopped',
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
@@ -385,6 +386,8 @@ export class ServerManager {
     const containerId = await this.docker.createContainer(row, serverFiles.hostDir(id));
     await this.docker.start(id);
     this.repo.setStatus(id, 'running', containerId);
+    // Record intent so the server is resumed if the manager restarts.
+    this.repo.setDesiredState(id, 'running');
   }
 
   /**
@@ -418,6 +421,37 @@ export class ServerManager {
     await this.rcon.disconnect(id);
     await this.docker.stop(id);
     this.repo.setStatus(id, 'stopped');
+    // Explicit stop = the server should stay stopped across a manager restart.
+    this.repo.setDesiredState(id, 'stopped');
+  }
+
+  /**
+   * On manager startup, start any server whose desired state is 'running' but
+   * whose container isn't currently running (e.g. after STOP_SERVERS_ON_SHUTDOWN,
+   * or a container that was removed). Best-effort per server; runs in the
+   * background so it never blocks the API coming up.
+   */
+  async resumeDesiredRunning(): Promise<void> {
+    const toResume: ServerRow[] = [];
+    for (const row of this.repo.list()) {
+      if (row.desired_state !== 'running') continue;
+      try {
+        if (!(await this.docker.status(row.id)).running) toResume.push(row);
+      } catch {
+        // Docker unreachable — skip; nothing we can do until it's back.
+        return;
+      }
+    }
+    if (toResume.length === 0) return;
+    console.log(`[startup] resuming ${toResume.length} server(s) that were running`);
+    for (const row of toResume) {
+      try {
+        await this.start(row.id);
+        console.log(`[startup] resumed ${row.subdomain} (${row.id})`);
+      } catch (err) {
+        console.error(`[startup] failed to resume ${row.id}: ${(err as Error).message}`);
+      }
+    }
   }
 
   async restart(id: string): Promise<void> {

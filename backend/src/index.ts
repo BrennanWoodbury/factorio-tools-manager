@@ -79,6 +79,14 @@ async function main() {
       `game ports ${config.gamePortRange.join('-')}, rcon ${config.rconPortRange.join('-')}`);
   });
 
+  // Resume servers that were running before the manager stopped. In the background
+  // (may pull images / take a while) so the API is available immediately.
+  if (config.resumeServersOnStartup) {
+    void ctx.manager
+      .resumeDesiredRunning()
+      .catch((err) => console.error(`[startup] resume failed: ${(err as Error).message}`));
+  }
+
   let shuttingDown = false;
   const shutdown = async () => {
     if (shuttingDown) return; // ignore repeated signals while stopping

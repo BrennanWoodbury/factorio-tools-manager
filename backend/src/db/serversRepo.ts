@@ -83,6 +83,10 @@ export class ServersRepo {
       .run(json, id);
   }
 
+  setDesiredState(id: string, state: 'running' | 'stopped'): void {
+    this.db.prepare('UPDATE servers SET desired_state = ? WHERE id = ?').run(state, id);
+  }
+
   setWhitelistJson(id: string, json: string): void {
     this.db
       .prepare("UPDATE servers SET whitelist_json = ?, updated_at = datetime('now') WHERE id = ?")
