@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
-import type { Server } from '../types';
+import type { DnsSettings, Server } from '../types';
 import { run, toast } from '../ui';
 import { AdvancedSettings } from './AdvancedSettings';
 import { WhitelistPanel } from './WhitelistPanel';
 import { FactorioTagSelect } from './FactorioTagSelect';
+import { DnsNamePreview } from './DnsNamePreview';
 
 export function SettingsPanel({
   server,
@@ -21,7 +22,12 @@ export function SettingsPanel({
   const [description, setDescription] = useState(server.description);
   const [factorioTag, setFactorioTag] = useState(server.factorioTag);
   const [autoRestart, setAutoRestart] = useState(server.autoRestart);
+  const [dns, setDns] = useState<DnsSettings | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.getDns().then((r) => setDns(r.dns)).catch(() => {});
+  }, []);
 
   const running = server.status === 'running';
 
@@ -59,6 +65,11 @@ export function SettingsPanel({
 
         <label>Subdomain (changing this updates the SRV record)</label>
         <input value={subdomain} onChange={(e) => setSubdomain(e.target.value.toLowerCase())} />
+        <DnsNamePreview
+          subdomain={subdomain}
+          baseDomain={dns?.baseDomain}
+          enabled={dns?.enabled ?? false}
+        />
 
         <label>Max players (0 = unlimited)</label>
         <input type="number" min={0} value={maxPlayers} onChange={(e) => setMaxPlayers(Number(e.target.value))} />

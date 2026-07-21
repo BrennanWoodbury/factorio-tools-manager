@@ -4,15 +4,18 @@ import type { MapGenSettings } from '../types';
 import { toastError, toastSuccess } from '../ui';
 import { FactorioTagSelect } from './FactorioTagSelect';
 import { MapGenEditor } from './MapGenEditor';
+import { DnsNamePreview } from './DnsNamePreview';
 
 export function CreateServerForm({
   onClose,
   onCreated,
   dnsEnabled,
+  baseDomain,
 }: {
   onClose: () => void;
   onCreated: (id: string) => void;
   dnsEnabled: boolean;
+  baseDomain: string | null;
 }) {
   const [name, setName] = useState('');
   const [subdomain, setSubdomain] = useState('');
@@ -87,15 +90,7 @@ export function CreateServerForm({
           placeholder="factory1"
           required
         />
-        {dnsEnabled ? (
-          <div className="small muted" style={{ marginTop: 4 }}>
-            Players will connect to <span className="mono">{subdomain || 'factory1'}.&lt;your-domain&gt;</span>
-          </div>
-        ) : (
-          <div className="small muted" style={{ marginTop: 4 }}>
-            DNS automation is off — players connect by <span className="mono">IP:port</span>.
-          </div>
-        )}
+        <DnsNamePreview subdomain={subdomain} baseDomain={baseDomain} enabled={dnsEnabled} />
 
         <label>Max players (0 = unlimited)</label>
         <input

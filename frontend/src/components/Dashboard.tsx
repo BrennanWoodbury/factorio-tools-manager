@@ -123,6 +123,7 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
       {showCreate && (
         <CreateServerForm
           dnsEnabled={system?.dns.enabled ?? false}
+          baseDomain={system?.dns.baseDomain ?? null}
           onClose={() => setShowCreate(false)}
           onCreated={(id) => {
             setShowCreate(false);

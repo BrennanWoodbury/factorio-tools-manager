@@ -117,6 +117,8 @@ export function DnsSettingsPanel() {
         </div>
       </div>
 
+      <DnsRecordsPreview baseDomain={baseDomain} hostRecordName={hostRecordName} />
+
       <div className="row">
         <div className="grow">
           <label>Cloudflare Zone ID</label>
@@ -174,6 +176,46 @@ export function DnsSettingsPanel() {
             {testResult}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Live preview of the DNS records that will be created, driven by the base domain
+ * and host record currently typed into the form — updates as you type.
+ */
+function DnsRecordsPreview({
+  baseDomain,
+  hostRecordName,
+}: {
+  baseDomain: string;
+  hostRecordName: string;
+}) {
+  const base = baseDomain.trim().toLowerCase();
+  if (!base) {
+    return (
+      <div className="small muted" style={{ margin: '4px 0 12px' }}>
+        Set a base domain to preview the DNS records that will be created.
+      </div>
+    );
+  }
+  const host = hostRecordName.trim().toLowerCase() || `host.${base}`;
+  return (
+    <div className="small muted" style={{ margin: '4px 0 12px', lineHeight: 1.7 }}>
+      <div>
+        <strong>Preview</strong> (updates as you type):
+      </div>
+      <div>
+        A record <span className="mono">{host}</span> → your public IP
+      </div>
+      <div>
+        Example server <span className="mono">factory1</span> connects to{' '}
+        <span className="mono">factory1.{base}</span>
+      </div>
+      <div>
+        via SRV <span className="mono">_factorio._udp.factory1.{base}</span> →{' '}
+        <span className="mono">{host}:34197</span>
       </div>
     </div>
   );
