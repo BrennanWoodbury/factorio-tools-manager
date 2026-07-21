@@ -116,8 +116,9 @@ export function ModsPanel({ server }: { server: Server }) {
 
       {!server.hasFactorioCredentials && (
         <div className="small muted" style={{ marginBottom: 10 }}>
-          No Factorio.com credentials set (Settings tab). You can still edit the list, but enabled
-          mods can't be downloaded until credentials are provided. Restart the server to apply changes.
+          No global Factorio.com account set (Servers dashboard → Factorio.com account). You can still
+          edit the list, but enabled mods can't be downloaded until it's provided. Restart the server
+          to apply changes.
         </div>
       )}
 

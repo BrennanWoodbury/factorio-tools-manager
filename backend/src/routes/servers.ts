@@ -7,6 +7,7 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 import { ValidationError } from '../lib/errors.js';
 import { sanitizeName } from '../services/serverFiles.js';
 import { serverFiles } from '../services/serverFiles.js';
+import { getFactorioAccount, factorioAccountConfigured } from '../services/factorioAccount.js';
 
 const modEntrySchema = z.object({ name: z.string().min(1), enabled: z.boolean() });
 
@@ -17,8 +18,6 @@ const createSchema = z.object({
   description: z.string().max(1000).optional(),
   saveName: z.string().max(100).optional(),
   generateNewSave: z.boolean().optional(),
-  factorioUsername: z.string().max(100).optional(),
-  factorioToken: z.string().max(200).optional(),
   factorioTag: z.string().max(128).optional(),
   autoRestart: z.boolean().optional(),
   mods: z.array(modEntrySchema).optional(),
@@ -34,8 +33,6 @@ const updateSchema = z.object({
   description: z.string().max(1000).optional(),
   saveName: z.string().max(100).optional(),
   generateNewSave: z.boolean().optional(),
-  factorioUsername: z.string().max(100).optional(),
-  factorioToken: z.string().max(200).optional(),
   factorioTag: z.string().max(128).optional(),
   autoRestart: z.boolean().optional(),
 });
@@ -55,7 +52,10 @@ export function serversRouter(ctx: AppContext): Router {
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024 * 1024 } });
 
   const dtoOf = (row: Parameters<typeof toDto>[0]) =>
-    toDto(row, manager.connectHost(row), ctx.docker.imageFor(row));
+    toDto(row, manager.connectHost(row), ctx.docker.imageFor(row), {
+      // Credentials are a single global setting now; the same flag applies to every server.
+      hasFactorioCredentials: factorioAccountConfigured(getFactorioAccount(ctx.db)),
+    });
 
   // ---- CRUD ----
 

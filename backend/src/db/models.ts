@@ -71,7 +71,12 @@ export interface ServerDto {
   connectHost?: string;
 }
 
-export function toDto(row: ServerRow, connectHost?: string, factorioImage?: string): ServerDto {
+export function toDto(
+  row: ServerRow,
+  connectHost?: string,
+  factorioImage?: string,
+  opts?: { hasFactorioCredentials?: boolean },
+): ServerDto {
   return {
     id: row.id,
     name: row.name,
@@ -82,7 +87,7 @@ export function toDto(row: ServerRow, connectHost?: string, factorioImage?: stri
     rconPort: row.rcon_port,
     saveName: row.save_name,
     generateNewSave: row.generate_new_save === 1,
-    hasFactorioCredentials: row.factorio_username !== '' && row.factorio_token !== '',
+    hasFactorioCredentials: opts?.hasFactorioCredentials ?? false,
     containerId: row.container_id,
     status: row.status,
     createdAt: row.created_at,

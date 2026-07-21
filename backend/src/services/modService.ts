@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import type { ServerRow } from '../db/models.js';
+import type { DB } from '../db/index.js';
 import { AppError, ValidationError } from '../lib/errors.js';
+import { getFactorioAccount } from './factorioAccount.js';
 import { serverFiles, type ModEntry } from './serverFiles.js';
 
 const MOD_PORTAL_BASE = 'https://mods.factorio.com';
@@ -64,6 +66,9 @@ export const BUNDLED_MODS = new Set(['base', 'space-age', 'quality', 'elevated-r
  * of scope for the MVP — enabling a mod downloads that mod's latest release only.
  */
 export class ModService {
+  /** Needs the DB to read the single global Factorio.com account for downloads. */
+  constructor(private readonly db: DB) {}
+
   // Cached full mod catalog. The portal has no keyword-search endpoint, so we
   // fetch the whole listing (~13MB, one request) and filter/rank in-memory,
   // refreshing at most every CATALOG_TTL_MS. An in-flight promise dedupes
@@ -176,16 +181,17 @@ export class ModService {
    * release; omit for latest. Returns the downloaded version.
    */
   async downloadMod(server: ServerRow, name: string, version?: string): Promise<string> {
-    if (!server.factorio_username || !server.factorio_token) {
+    const account = getFactorioAccount(this.db);
+    if (!account.username || !account.token) {
       throw new ValidationError(
-        'Mod portal credentials are required to download mods; set them on the server first',
+        'A Factorio.com account is required to download mods; set it in global settings',
       );
     }
     const release = await this.getRelease(name, version);
     const url =
       `${MOD_PORTAL_BASE}${release.download_url}` +
-      `?username=${encodeURIComponent(server.factorio_username)}` +
-      `&token=${encodeURIComponent(server.factorio_token)}`;
+      `?username=${encodeURIComponent(account.username)}` +
+      `&token=${encodeURIComponent(account.token)}`;
 
     let res: Response;
     try {
@@ -313,5 +319,3 @@ export class ModService {
     return { mods: serverFiles.readModList(serverId) };
   }
 }
-
-export const modService = new ModService();

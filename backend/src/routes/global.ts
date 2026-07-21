@@ -4,6 +4,7 @@ import type { AppContext } from '../context.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { ValidationError } from '../lib/errors.js';
 import { dnsSettingsDto, getDnsSettings, setDnsSettings } from '../services/dnsSettings.js';
+import { factorioAccountDto, getFactorioAccount, setFactorioAccount } from '../services/factorioAccount.js';
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const r = schema.safeParse(body);
@@ -50,6 +51,31 @@ export function globalRouter(ctx: AppContext): Router {
     '/dns/test',
     asyncHandler(async (_req, res) => {
       res.json(await ctx.dns.testConnection());
+    }),
+  );
+
+  // ---- Global Factorio.com account (one account for every server) ----
+
+  r.get(
+    '/factorio',
+    asyncHandler(async (_req, res) => {
+      res.json({ factorio: factorioAccountDto(getFactorioAccount(ctx.db)) });
+    }),
+  );
+
+  r.put(
+    '/factorio',
+    asyncHandler(async (req, res) => {
+      const body = parse(
+        z.object({
+          username: z.string().max(100).optional(),
+          // Only sent when the admin (re)enters it. '' explicitly clears it.
+          token: z.string().max(200).optional(),
+        }),
+        req.body,
+      );
+      setFactorioAccount(ctx.db, body);
+      res.json({ factorio: factorioAccountDto(getFactorioAccount(ctx.db)) });
     }),
   );
 

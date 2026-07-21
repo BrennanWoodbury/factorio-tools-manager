@@ -3,6 +3,7 @@ import type {
   BackupInfo,
   CatalogEntry,
   DnsSettings,
+  FactorioAccount,
   MapGen,
   MapGenTemplate,
   MapGenTemplateDetail,
@@ -206,6 +207,11 @@ export const api = {
   getGlobalAdminlist: () => req<{ adminlist: string[] }>('GET', '/global/adminlist'),
   setGlobalAdminlist: (adminlist: string[]) =>
     req<{ adminlist: string[] }>('PUT', '/global/adminlist', { adminlist }),
+
+  // global Factorio.com account (one account for every server)
+  getFactorioAccount: () => req<{ factorio: FactorioAccount }>('GET', '/global/factorio'),
+  setFactorioAccount: (patch: { username?: string; token?: string }) =>
+    req<{ factorio: FactorioAccount }>('PUT', '/global/factorio', patch),
 
   // dns / cloudflare
   getDns: () => req<{ dns: DnsSettings }>('GET', '/global/dns'),

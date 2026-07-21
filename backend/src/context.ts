@@ -38,7 +38,7 @@ export function buildContext(config: AppConfig): AppContext {
   const docker = new DockerService(config);
   const dns = new DnsService(db);
   const rcon = new RconService(config);
-  const mods = new ModService();
+  const mods = new ModService(db);
   const modpacksRepo = new ModpacksRepo(db);
   const modpacks = new ModpackService(modpacksRepo, repo, mods);
   const mapGenTemplates = new MapGenTemplateService(new MapGenTemplatesRepo(db), repo);

@@ -124,8 +124,11 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 
 ## Using it
 
-- **Create a server:** name + subdomain (+ optional max players, description, mod-portal creds).
+- **Create a server:** name + subdomain (+ optional max players, description, map generation).
   Ports are allocated atomically and, if DNS is on, the SRV record is created.
+- **Factorio.com account:** one global account (username + token), set on the Servers dashboard,
+  used by **every** server for mod-portal downloads and the public server listing. There are no
+  per-server credentials.
 - **Lifecycle:** start / stop / restart / delete. Delete removes the container, DNS record,
   releases the ports and deletes the data dir.
 - **Console:** live RCON console + player list (over loopback / Docker network only).
@@ -163,10 +166,11 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   pick up updates to moving tags; if the registry is unreachable it falls back to the local copy.
 - **Mods:** search the Factorio Mod Portal by keyword and add mods with one click; upload a mod
   `.zip` manually; enable/disable; update all to latest; delete all; export a shareable manifest.
-  With mod-portal credentials, enabled mods are downloaded on save. Changes apply on next start.
+  With the global Factorio.com account set, enabled mods are downloaded on save. Changes apply on
+  next start.
 - **Modpacks (shared registry):** build named, reusable mod collections once and **apply them to
-  any server** (packs are manifests only — no binaries or credentials; each server downloads the
-  mods with its own credentials). Create a pack from scratch, snapshot one from a server, or
+  any server** (packs are manifests only — no binaries or credentials; mods are downloaded with the
+  global Factorio.com account). Create a pack from scratch, snapshot one from a server, or
   **import/export** a pack as a JSON manifest to share it. Editing a pack doesn't auto-change
   servers; re-apply is explicit ("re-apply to all N servers using this pack"). A built-in
   **"Space Age"** modpack (`space-age` / `quality` / `elevated-rails`) is seeded on first run;
@@ -265,6 +269,7 @@ for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id)
 | GET/POST/PATCH/DELETE | `/mapgen-templates[...]` | map-gen template registry (list/create/edit/delete) |
 | POST/GET | `/mapgen-templates/{import,from-server}` · `/:id/export` | import / snapshot / export a template |
 | GET/PUT | `/servers/:id/{whitelist,adminlist}` · `/global/{whitelist,adminlist}` | per-server / global whitelist + admin list |
+| GET/PUT | `/global/factorio` | the global Factorio.com account (mods + public listing) |
 | GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / create / select / download / delete |
 | GET/POST/DELETE | `/servers/:id/backups[...]` | list / create / download / restore / delete |
 | GET/PUT | `/servers/:id/mods` | get / apply mod list |

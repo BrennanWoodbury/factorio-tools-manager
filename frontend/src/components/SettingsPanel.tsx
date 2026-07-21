@@ -19,8 +19,6 @@ export function SettingsPanel({
   const [subdomain, setSubdomain] = useState(server.subdomain);
   const [maxPlayers, setMaxPlayers] = useState(server.maxPlayers);
   const [description, setDescription] = useState(server.description);
-  const [modUser, setModUser] = useState('');
-  const [modToken, setModToken] = useState('');
   const [factorioTag, setFactorioTag] = useState(server.factorioTag);
   const [autoRestart, setAutoRestart] = useState(server.autoRestart);
   const [busy, setBusy] = useState(false);
@@ -37,14 +35,10 @@ export function SettingsPanel({
       factorioTag,
       autoRestart,
     };
-    if (modUser) patch.factorioUsername = modUser;
-    if (modToken) patch.factorioToken = modToken;
     const ok = await run(() => api.updateServer(server.id, patch), 'Settings saved');
     if (ok && autoRestart && running) {
       toast('Auto-restarting the server to apply changes…', 'info');
     }
-    setModUser('');
-    setModToken('');
     setBusy(false);
     onChanged();
   };
@@ -93,16 +87,10 @@ export function SettingsPanel({
           the next manual start.
         </div>
 
-        <details style={{ marginTop: 12 }}>
-          <summary className="muted" style={{ cursor: 'pointer' }}>
-            Update Factorio.com credentials (mods & public listing){' '}
-            {server.hasFactorioCredentials ? '(currently set)' : '(not set)'}
-          </summary>
-          <label>Factorio.com username</label>
-          <input value={modUser} onChange={(e) => setModUser(e.target.value)} />
-          <label>Factorio.com token</label>
-          <input type="password" value={modToken} onChange={(e) => setModToken(e.target.value)} />
-        </details>
+        <div className="small muted" style={{ marginTop: 12 }}>
+          Factorio.com credentials (mods & public listing) are a global setting on the Servers
+          dashboard — {server.hasFactorioCredentials ? 'currently set' : 'not set yet'}.
+        </div>
 
         <div className="row" style={{ marginTop: 16 }}>
           <button className="primary" disabled={busy} onClick={() => void save()}>

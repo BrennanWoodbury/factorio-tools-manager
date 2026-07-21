@@ -5,6 +5,7 @@ import { CreateServerForm } from './CreateServerForm';
 import { StatusBadge } from './StatusBadge';
 import { WhitelistPanel } from './WhitelistPanel';
 import { DnsSettingsPanel } from './DnsSettingsPanel';
+import { FactorioAccountPanel } from './FactorioAccountPanel';
 import { LifecycleControls } from './LifecycleControls';
 
 export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
@@ -80,6 +81,13 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
       })}
 
       <details style={{ marginTop: 18 }}>
+        <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
+          Factorio.com account (applies to every server)
+        </summary>
+        <FactorioAccountPanel />
+      </details>
+
+      <details style={{ marginTop: 8 }}>
         <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
           DNS / Cloudflare settings
         </summary>

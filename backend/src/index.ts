@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { buildContext } from './context.js';
 import { kvGet, kvSet } from './db/index.js';
+import { getFactorioAccount, setFactorioAccount } from './services/factorioAccount.js';
 import { authRouter } from './routes/auth.js';
 import { serversRouter } from './routes/servers.js';
 import { modsRouter } from './routes/mods.js';
@@ -42,6 +43,28 @@ async function main() {
       console.warn(`[startup] modpack seed skipped: ${(err as Error).message}`);
     }
     kvSet(ctx.db, 'default_modpacks_seeded', '1');
+  }
+
+  // One-time: migrate any existing per-server Factorio.com credentials to the new
+  // single global account, so upgrades keep working without re-entering them.
+  if (kvGet(ctx.db, 'factorio_account_migrated') !== '1') {
+    try {
+      const acct = getFactorioAccount(ctx.db);
+      if (!acct.username && !acct.token) {
+        const row = ctx.db
+          .prepare<{ u: string; t: string }>(
+            "SELECT factorio_username AS u, factorio_token AS t FROM servers WHERE factorio_username <> '' AND factorio_token <> '' LIMIT 1",
+          )
+          .get();
+        if (row?.u && row?.t) {
+          setFactorioAccount(ctx.db, { username: row.u, token: row.t });
+          console.log('[startup] migrated a per-server Factorio.com account to the global setting');
+        }
+      }
+    } catch (err) {
+      console.warn(`[startup] factorio account migration skipped: ${(err as Error).message}`);
+    }
+    kvSet(ctx.db, 'factorio_account_migrated', '1');
   }
 
   // Seed the built-in map-generation templates once (same delete-safe kv guard).

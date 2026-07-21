@@ -29,6 +29,13 @@ export interface MapGen {
   mapGen: MapGenSettings;
 }
 
+/** The single global Factorio.com account (token never returned). */
+export interface FactorioAccount {
+  username: string;
+  hasToken: boolean;
+  configured: boolean;
+}
+
 export interface MapGenTemplate {
   id: string;
   name: string;

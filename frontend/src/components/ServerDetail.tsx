@@ -112,7 +112,7 @@ function Overview({ server, status }: { server: Server; status: ServerStatus | n
     ['Factorio image', server.factorioImage ?? '(default)'],
     ['Selected save', server.saveName],
     ['Generate new save on start', server.generateNewSave ? 'yes' : 'no'],
-    ['Factorio.com credentials', server.hasFactorioCredentials ? 'set' : 'not set'],
+    ['Factorio.com account (global)', server.hasFactorioCredentials ? 'set' : 'not set'],
     ['Container state', status?.status ?? server.status],
     ['Started at', status?.startedAt ? new Date(status.startedAt).toLocaleString() : '—'],
     ['Created', new Date(server.createdAt).toLocaleString()],

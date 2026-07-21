@@ -18,8 +18,6 @@ export function CreateServerForm({
   const [subdomain, setSubdomain] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(0);
   const [description, setDescription] = useState('');
-  const [modUser, setModUser] = useState('');
-  const [modToken, setModToken] = useState('');
   const [factorioTag, setFactorioTag] = useState('stable');
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,8 +43,6 @@ export function CreateServerForm({
         maxPlayers,
         description,
         generateNewSave: true,
-        factorioUsername: modUser || undefined,
-        factorioToken: modToken || undefined,
         factorioTag: factorioTag.trim() || undefined,
         mapGen: mapGen ?? undefined,
       });
@@ -113,16 +109,10 @@ export function CreateServerForm({
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
 
         <FactorioTagSelect value={factorioTag} onChange={setFactorioTag} />
-
-        <details style={{ marginTop: 12 }}>
-          <summary className="muted" style={{ cursor: 'pointer' }}>
-            Factorio.com account (optional — for downloading mods & public listing)
-          </summary>
-          <label>Factorio.com username</label>
-          <input value={modUser} onChange={(e) => setModUser(e.target.value)} />
-          <label>Factorio.com token</label>
-          <input value={modToken} onChange={(e) => setModToken(e.target.value)} type="password" />
-        </details>
+        <div className="small muted" style={{ marginTop: 4 }}>
+          Mods & public listing use the global <strong>Factorio.com account</strong> (set on the
+          Servers dashboard) — one account for every server.
+        </div>
 
         <details style={{ marginTop: 12 }} onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) void initMapGen(); }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>

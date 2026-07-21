@@ -2,6 +2,7 @@ import Docker from 'dockerode';
 import { randomBytes } from 'node:crypto';
 import type { AppConfig } from '../config.js';
 import type { ServerRow } from '../db/models.js';
+import type { FactorioAccount } from './factorioAccount.js';
 import { DockerError } from '../lib/errors.js';
 
 /**
@@ -156,7 +157,7 @@ export class DockerService {
     }
   }
 
-  private envFor(server: ServerRow): string[] {
+  private envFor(server: ServerRow, account?: FactorioAccount): string[] {
     const env: Record<string, string> = {
       SAVE_NAME: server.save_name,
       GENERATE_NEW_SAVE: server.generate_new_save === 1 ? 'true' : 'false',
@@ -171,9 +172,10 @@ export class DockerService {
       // trying to update them on boot (which would also fail without creds).
       UPDATE_MODS_ON_START: 'false',
     };
-    if (server.factorio_username && server.factorio_token) {
-      env.USERNAME = server.factorio_username;
-      env.TOKEN = server.factorio_token;
+    // The single global Factorio.com account, used for public-server listing.
+    if (account?.username && account?.token) {
+      env.USERNAME = account.username;
+      env.TOKEN = account.token;
     }
     if (this.config.puid) env.PUID = this.config.puid;
     if (this.config.pgid) env.PGID = this.config.pgid;
@@ -185,7 +187,11 @@ export class DockerService {
    * the path as the *Docker daemon* sees it (the host path), not the manager's
    * in-container view. Returns the container id.
    */
-  async createContainer(server: ServerRow, hostDataDir: string): Promise<string> {
+  async createContainer(
+    server: ServerRow,
+    hostDataDir: string,
+    account?: FactorioAccount,
+  ): Promise<string> {
     const gamePort = String(server.game_port);
     const rconPort = String(server.rcon_port);
     const image = this.imageFor(server);
@@ -194,7 +200,7 @@ export class DockerService {
       const container = await this.docker.createContainer({
         name: this.containerName(server.id),
         Image: image,
-        Env: this.envFor(server),
+        Env: this.envFor(server, account),
         ExposedPorts: {
           [`${gamePort}/udp`]: {},
           [`${RCON_PORT_INTERNAL}/tcp`]: {},

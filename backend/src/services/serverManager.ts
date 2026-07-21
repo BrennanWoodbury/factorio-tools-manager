@@ -8,6 +8,7 @@ import { DockerService } from './dockerService.js';
 import { DnsService } from './dnsService.js';
 import { RconService } from './rconService.js';
 import { serverFiles, sanitizeName, type ModEntry } from './serverFiles.js';
+import { getFactorioAccount } from './factorioAccount.js';
 import { DockerError, DuplicateSubdomainError, NotFoundError, ValidationError } from '../lib/errors.js';
 
 export interface CreateServerInput {
@@ -17,8 +18,6 @@ export interface CreateServerInput {
   description?: string;
   saveName?: string;
   generateNewSave?: boolean;
-  factorioUsername?: string;
-  factorioToken?: string;
   factorioTag?: string;
   autoRestart?: boolean;
   mods?: ModEntry[];
@@ -33,8 +32,6 @@ export interface UpdateServerInput {
   description?: string;
   saveName?: string;
   generateNewSave?: boolean;
-  factorioUsername?: string;
-  factorioToken?: string;
   factorioTag?: string;
   autoRestart?: boolean;
   autoBackup?: boolean;
@@ -114,8 +111,9 @@ export class ServerManager {
       rcon_password: rconPassword,
       save_name: saveName,
       generate_new_save: input.generateNewSave === false ? 0 : 1,
-      factorio_username: input.factorioUsername ?? '',
-      factorio_token: input.factorioToken ?? '',
+      // Credentials are global now (see factorioAccount); these columns are unused.
+      factorio_username: '',
+      factorio_token: '',
       container_id: null,
       status: 'stopped',
       created_at: '',
@@ -196,10 +194,6 @@ export class ServerManager {
       const gen = input.generateNewSave ? 1 : 0;
       if (gen !== current.generate_new_save) set('generate_new_save', gen, true);
     }
-    if (input.factorioUsername !== undefined && input.factorioUsername !== current.factorio_username)
-      set('factorio_username', input.factorioUsername, true);
-    if (input.factorioToken !== undefined && input.factorioToken !== current.factorio_token)
-      set('factorio_token', input.factorioToken, true);
     if (input.factorioTag !== undefined) {
       const tag = this.cleanTag(input.factorioTag);
       if (tag !== (current.factorio_tag ?? '')) set('factorio_tag', tag, true);
@@ -431,7 +425,11 @@ export class ServerManager {
     serverFiles.writeWhitelist(id, this.effectiveWhitelist(id));
     serverFiles.writeAdminlist(id, this.effectiveAdminlist(id));
     await this.docker.remove(id);
-    const containerId = await this.docker.createContainer(row, serverFiles.hostDir(id));
+    const containerId = await this.docker.createContainer(
+      row,
+      serverFiles.hostDir(id),
+      getFactorioAccount(this.db),
+    );
     await this.docker.start(id);
     this.repo.setStatus(id, 'running', containerId);
     // Record intent so the server is resumed if the manager restarts.
