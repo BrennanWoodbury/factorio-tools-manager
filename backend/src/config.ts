@@ -69,6 +69,11 @@ export const config = {
   //  - 'loopback' : connect to 127.0.0.1:<rconPort> (correct for local dev with
   //                 the backend running directly on the host).
   rconMode: opt('RCON_MODE', 'network') as 'network' | 'loopback',
+  // When true, stop all managed Factorio containers when the manager shuts down.
+  // Default false so games survive a manager restart/update (and so dev hot-reloads
+  // don't kill running servers). Enable in production for a clean full shutdown.
+  stopServersOnShutdown: opt('STOP_SERVERS_ON_SHUTDOWN', 'false') === 'true',
+  shutdownStopTimeoutSecs: intOpt('SHUTDOWN_STOP_TIMEOUT_SECONDS', 30),
   // Absolute path to the servers data dir *as seen by the Docker daemon (the host)*.
   // When the manager runs in a container, its own DATA_DIR is a mount, but the
   // Factorio containers it spawns are bind-mounted from the host path. These can

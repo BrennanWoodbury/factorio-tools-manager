@@ -11,6 +11,9 @@ services:
     image: factorio-manager:latest
     container_name: factorio-manager
     restart: unless-stopped
+    # Give the manager time to gracefully stop the Factorio containers on shutdown
+    # (only matters when STOP_SERVERS_ON_SHUTDOWN=true).
+    stop_grace_period: 90s
     ports:
       # Web UI + API on the host. Change the host side via WEB_PORT (the container
       # always listens on 8080). Put a TLS reverse proxy in front in production.
@@ -38,6 +41,9 @@ services:
       RCON_MODE: network
       PUID: ${PUID:-845}
       PGID: ${PGID:-845}
+      # Stop all Factorio containers when the manager shuts down (e.g. compose down).
+      # Default false => games keep running across a manager restart/update.
+      STOP_SERVERS_ON_SHUTDOWN: ${STOP_SERVERS_ON_SHUTDOWN:-false}
       # DNS / DDNS (Cloudflare) is configured in the dashboard, not via env.
     volumes:
       # Manage sibling containers via the host Docker daemon.

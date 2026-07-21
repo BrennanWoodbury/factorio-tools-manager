@@ -110,6 +110,7 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 | `FACTORIO_NETWORK`      |          | `factorio-net`                 | Shared Docker network for manager↔RCON |
 | `RCON_MODE`             |          | `network`                      | `network` (containerized) or `loopback` (local dev) |
 | `PUID` / `PGID`         |          | `845`                          | UID/GID the Factorio image runs as |
+| `STOP_SERVERS_ON_SHUTDOWN` |       | `false`                        | Stop all Factorio containers when the manager shuts down |
 
 > **DNS / Cloudflare is not configured via env** — set the base domain, host record, Zone ID, API
 > token, DDNS interval and IP-check URL in the dashboard (**DNS / Cloudflare settings**). They're

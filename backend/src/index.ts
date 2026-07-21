@@ -79,9 +79,20 @@ async function main() {
       `game ports ${config.gamePortRange.join('-')}, rcon ${config.rconPortRange.join('-')}`);
   });
 
+  let shuttingDown = false;
   const shutdown = async () => {
+    if (shuttingDown) return; // ignore repeated signals while stopping
+    shuttingDown = true;
     console.log('[factorio-manager] shutting down');
     ctx.ddns.stop();
+    if (config.stopServersOnShutdown) {
+      try {
+        const n = await ctx.docker.stopAllManaged(config.shutdownStopTimeoutSecs);
+        console.log(`[shutdown] stopped ${n} managed Factorio container(s)`);
+      } catch (err) {
+        console.warn(`[shutdown] stopping managed containers failed: ${(err as Error).message}`);
+      }
+    }
     await ctx.rcon.disconnectAll();
     server.close();
     ctx.db.close();

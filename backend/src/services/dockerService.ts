@@ -100,6 +100,30 @@ export class DockerService {
     });
   }
 
+  /**
+   * Gracefully stop every running container this manager created (identified by
+   * the managed label). Stops happen in parallel so total time ≈ one container's
+   * stop timeout. Used on manager shutdown. Returns how many were stopped.
+   */
+  async stopAllManaged(timeoutSecs = 30): Promise<number> {
+    const list = await this.docker.listContainers({
+      filters: { label: [`${MANAGED_LABEL}=true`] },
+    });
+    await Promise.all(
+      list.map(async (c) => {
+        try {
+          await this.docker.getContainer(c.Id).stop({ t: timeoutSecs });
+        } catch (err) {
+          const code = (err as { statusCode?: number }).statusCode;
+          if (code !== 304 && code !== 404) {
+            console.warn(`[docker] stop ${c.Names?.[0] ?? c.Id} failed: ${(err as Error).message}`);
+          }
+        }
+      }),
+    );
+    return list.length;
+  }
+
   async ping(): Promise<void> {
     try {
       await this.docker.ping();
