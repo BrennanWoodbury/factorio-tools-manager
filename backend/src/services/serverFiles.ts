@@ -70,7 +70,9 @@ export class ServerFilesService {
       max_upload_slots: 5,
       minimum_latency_in_ticks: 0,
       game_password: '',
-      allow_commands: 'admin-only',
+      // Factorio 2.x spelling is "admins-only" (1.x used "admin-only"); the wrong
+      // value makes the server refuse to start ("Invalid value ... AllowedCommands").
+      allow_commands: 'admins-only',
       autosave_interval: 10,
       autosave_slots: 5,
       afk_autokick_interval: 0,

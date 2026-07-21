@@ -116,10 +116,10 @@ export function AdvancedSettings({ serverId }: { serverId: string }) {
         </div>
         <div className="grow">
           <label>Allow commands</label>
-          <select value={str('allow_commands') || 'admin-only'} onChange={(e) => set('allow_commands', e.target.value)}>
+          <select value={str('allow_commands') || 'admins-only'} onChange={(e) => set('allow_commands', e.target.value)}>
             <option value="true">true (anyone)</option>
             <option value="false">false (nobody)</option>
-            <option value="admin-only">admin-only</option>
+            <option value="admins-only">admins-only</option>
           </select>
         </div>
       </div>
