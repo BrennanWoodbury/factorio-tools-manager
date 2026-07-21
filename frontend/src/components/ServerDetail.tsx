@@ -6,11 +6,20 @@ import { Console } from './Console';
 import { SavesPanel } from './SavesPanel';
 import { BackupsPanel } from './BackupsPanel';
 import { ModsPanel } from './ModsPanel';
+import { MapGenPanel } from './MapGenPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { LifecycleControls } from './LifecycleControls';
 import { toastError } from '../ui';
 
-type Tab = 'overview' | 'console' | 'saves' | 'mods' | 'settings';
+type Tab = 'overview' | 'console' | 'saves' | 'mapgen' | 'mods' | 'settings';
+const TAB_LABELS: Record<Tab, string> = {
+  overview: 'Overview',
+  console: 'Console',
+  saves: 'Saves',
+  mapgen: 'Map gen',
+  mods: 'Mods',
+  settings: 'Settings',
+};
 
 export function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const [server, setServer] = useState<Server | null>(null);
@@ -72,9 +81,9 @@ export function ServerDetail({ id, onBack }: { id: string; onBack: () => void })
       </div>
 
       <div className="tabs">
-        {(['overview', 'console', 'saves', 'mods', 'settings'] as Tab[]).map((t) => (
+        {(['overview', 'console', 'saves', 'mapgen', 'mods', 'settings'] as Tab[]).map((t) => (
           <div key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t[0].toUpperCase() + t.slice(1)}
+            {TAB_LABELS[t]}
           </div>
         ))}
       </div>
@@ -87,6 +96,7 @@ export function ServerDetail({ id, onBack }: { id: string; onBack: () => void })
           <BackupsPanel server={server} onChanged={load} />
         </>
       )}
+      {tab === 'mapgen' && <MapGenPanel server={server} />}
       {tab === 'mods' && <ModsPanel server={server} />}
       {tab === 'settings' && <SettingsPanel server={server} onChanged={load} onDeleted={onBack} />}
     </>

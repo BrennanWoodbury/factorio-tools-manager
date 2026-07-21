@@ -3,6 +3,7 @@ import type {
   BackupInfo,
   CatalogEntry,
   DnsSettings,
+  MapGen,
   ModEntry,
   Modpack,
   ModpackDetail,
@@ -96,6 +97,11 @@ export const api = {
   },
   downloadSaveUrl: (id: string, name: string) =>
     `/api/servers/${id}/saves/${encodeURIComponent(name)}/download`,
+
+  // map generation (new-save settings)
+  getMapGen: (id: string) => req<MapGen>('GET', `/servers/${id}/mapgen`),
+  setMapGen: (id: string, patch: { mapGen?: Record<string, unknown>; mapSettings?: Record<string, unknown> }) =>
+    req<MapGen>('PUT', `/servers/${id}/mapgen`, patch),
 
   // backups
   listBackups: (id: string) => req<{ backups: BackupInfo[] }>('GET', `/servers/${id}/backups`),

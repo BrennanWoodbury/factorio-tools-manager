@@ -158,6 +158,29 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  // ---- Map generation (new-save settings) ----
+
+  r.get(
+    '/:id/mapgen',
+    asyncHandler(async (req, res) => {
+      res.json(manager.getMapGen(req.params.id));
+    }),
+  );
+
+  r.put(
+    '/:id/mapgen',
+    asyncHandler(async (req, res) => {
+      const body = parse(
+        z.object({
+          mapGen: z.record(z.string(), z.unknown()).optional(),
+          mapSettings: z.record(z.string(), z.unknown()).optional(),
+        }),
+        req.body,
+      );
+      res.json(await manager.updateMapGen(req.params.id, body));
+    }),
+  );
+
   // ---- Per-server player whitelist ----
 
   r.get(

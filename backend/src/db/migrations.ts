@@ -85,6 +85,18 @@ const MIGRATIONS: Migration[] = [
       db.exec('ALTER TABLE servers ADD COLUMN backup_keep INTEGER NOT NULL DEFAULT 10');
     },
   },
+  {
+    version: 10,
+    // New-map generation settings (the in-game "map generation" screen): resource
+    // frequency/size/richness, water, cliffs, starting area, peaceful mode, seed
+    // (map-gen-settings.json) and enemy/pollution controls (map-settings.json).
+    // Nullable => use the image's example defaults; written to config/ before a new
+    // save is generated.
+    up: (db) => {
+      db.exec('ALTER TABLE servers ADD COLUMN map_gen_settings_json TEXT');
+      db.exec('ALTER TABLE servers ADD COLUMN map_settings_json TEXT');
+    },
+  },
 ];
 
 export function runMigrations(db: DB): void {

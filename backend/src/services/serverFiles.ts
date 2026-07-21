@@ -116,6 +116,119 @@ export class ServerFilesService {
     );
   }
 
+  // ---- Map generation settings (new-save generation) ----
+
+  /**
+   * Default map-gen-settings.json — mirrors the factoriotools image's
+   * map-gen-settings.example.json (Factorio 2.x schema, where water/trees/enemy-base
+   * live under autoplace_controls). Used when the server has none stored, and as the
+   * base that stored values are merged onto so newly-added keys still appear.
+   */
+  defaultMapGenSettings(): Record<string, unknown> {
+    return {
+      width: 0,
+      height: 0,
+      starting_area: 1,
+      peaceful_mode: false,
+      autoplace_controls: {
+        coal: { frequency: 1, size: 1, richness: 1 },
+        stone: { frequency: 1, size: 1, richness: 1 },
+        'copper-ore': { frequency: 1, size: 1, richness: 1 },
+        'iron-ore': { frequency: 1, size: 1, richness: 1 },
+        'uranium-ore': { frequency: 1, size: 1, richness: 1 },
+        'crude-oil': { frequency: 1, size: 1, richness: 1 },
+        water: { frequency: 1, size: 1 },
+        trees: { frequency: 1, size: 1 },
+        'enemy-base': { frequency: 1, size: 1 },
+      },
+      cliff_settings: {
+        name: 'cliff',
+        cliff_elevation_0: 10,
+        cliff_elevation_interval: 40,
+        richness: 1,
+      },
+      property_expression_names: {
+        'control:moisture:frequency': '1',
+        'control:moisture:bias': '0',
+        'control:aux:frequency': '1',
+        'control:aux:bias': '0',
+      },
+      starting_points: [{ x: 0, y: 0 }],
+      seed: null,
+    };
+  }
+
+  /** Default map-settings.json — mirrors the image's map-settings.example.json. */
+  defaultMapSettings(): Record<string, unknown> {
+    return {
+      difficulty_settings: { technology_price_multiplier: 1, spoil_time_modifier: 1 },
+      pollution: {
+        enabled: true,
+        diffusion_ratio: 0.02,
+        min_to_diffuse: 15,
+        ageing: 1,
+        expected_max_per_chunk: 150,
+        min_to_show_per_chunk: 50,
+        min_pollution_to_damage_trees: 60,
+        pollution_with_max_forest_damage: 150,
+        pollution_per_tree_damage: 50,
+        pollution_restored_per_tree_damage: 10,
+        max_pollution_to_restore_trees: 20,
+        enemy_attack_pollution_consumption_modifier: 1,
+      },
+      enemy_evolution: {
+        enabled: true,
+        time_factor: 0.000004,
+        destroy_factor: 0.002,
+        pollution_factor: 0.0000009,
+      },
+      enemy_expansion: {
+        enabled: true,
+        max_expansion_distance: 7,
+        settler_group_min_size: 5,
+        settler_group_max_size: 20,
+        min_expansion_cooldown: 14400,
+        max_expansion_cooldown: 216000,
+      },
+    };
+  }
+
+  /** Stored map-gen-settings for a server, deep-merged onto the defaults. */
+  getMapGenSettings(server: ServerRow): Record<string, unknown> {
+    return deepMerge(this.defaultMapGenSettings(), parseJsonObject(server.map_gen_settings_json));
+  }
+
+  /** Stored map-settings for a server, deep-merged onto the defaults. */
+  getMapSettings(server: ServerRow): Record<string, unknown> {
+    return deepMerge(this.defaultMapSettings(), parseJsonObject(server.map_settings_json));
+  }
+
+  mapGenSettingsPath(serverId: string): string {
+    return path.join(this.configDir(serverId), 'map-gen-settings.json');
+  }
+
+  mapSettingsPath(serverId: string): string {
+    return path.join(this.configDir(serverId), 'map-settings.json');
+  }
+
+  /**
+   * Write config/map-gen-settings.json + config/map-settings.json from the server
+   * row. The factoriotools image passes these to `--create` when generating a new
+   * save, so they must be on disk before generation. Written before each start and
+   * before an explicit `createSave`.
+   */
+  writeMapGenAndSettings(server: ServerRow): void {
+    this.ensureDirs(server.id);
+    fs.writeFileSync(
+      this.mapGenSettingsPath(server.id),
+      JSON.stringify(this.getMapGenSettings(server), null, 2),
+    );
+    fs.writeFileSync(
+      this.mapSettingsPath(server.id),
+      JSON.stringify(this.getMapSettings(server), null, 2),
+    );
+  }
+
   // ---- RCON password ----
 
   rconPasswordPath(serverId: string): string {
@@ -323,6 +436,41 @@ export class ServerFilesService {
       JSON.stringify({ mods: mods.map((m) => ({ name: m.name, enabled: m.enabled })) }, null, 2),
     );
   }
+}
+
+/** Parse a JSON string into a plain object, or {} on null/invalid input. */
+function parseJsonObject(json: string | null): Record<string, unknown> {
+  if (!json) return {};
+  try {
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Recursively merge `override` onto `base`. Plain objects are merged key-by-key;
+ * arrays and scalars from `override` replace `base` wholesale. Neither input is
+ * mutated. Lets stored settings override defaults while any keys the user never
+ * touched (e.g. added in a later game version) fall back to the default.
+ */
+function deepMerge(
+  base: Record<string, unknown>,
+  override: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(override)) {
+    const cur = out[k];
+    out[k] = isPlainObject(cur) && isPlainObject(v) ? deepMerge(cur, v) : v;
+  }
+  return out;
 }
 
 /** Prevent path traversal / illegal filename chars in user-supplied save names. */

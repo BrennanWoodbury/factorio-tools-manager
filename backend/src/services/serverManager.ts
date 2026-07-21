@@ -128,6 +128,8 @@ export class ServerManager {
       auto_backup: 0,
       backup_interval_minutes: 60,
       backup_keep: 10,
+      map_gen_settings_json: null,
+      map_settings_json: null,
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
@@ -280,6 +282,36 @@ export class ServerManager {
     return serverFiles.getAdvancedSettings(this.get(id));
   }
 
+  // ---- Map generation (new-save settings) ----
+
+  /** Effective map-gen-settings + map-settings for a server (defaults filled). */
+  getMapGen(id: string): { mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> } {
+    const row = this.get(id);
+    return {
+      mapGen: serverFiles.getMapGenSettings(row),
+      mapSettings: serverFiles.getMapSettings(row),
+    };
+  }
+
+  /**
+   * Store new-map generation settings. These only affect the NEXT map generated
+   * (a fresh start with no save, or an explicit "New save"), so no running game is
+   * restarted. Either part may be omitted to leave it unchanged.
+   */
+  async updateMapGen(
+    id: string,
+    input: { mapGen?: Record<string, unknown>; mapSettings?: Record<string, unknown> },
+  ): Promise<{ mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> }> {
+    this.get(id); // 404 if unknown
+    if (input.mapGen !== undefined) {
+      this.repo.setMapGenSettingsJson(id, JSON.stringify(input.mapGen));
+    }
+    if (input.mapSettings !== undefined) {
+      this.repo.setMapSettingsJson(id, JSON.stringify(input.mapSettings));
+    }
+    return this.getMapGen(id);
+  }
+
   // ---- Whitelist ----
 
   /** Sanitise a list of usernames: trim, drop blanks, dedupe (case-insensitive). */
@@ -391,6 +423,9 @@ export class ServerManager {
     // Recreate the container each start so it always reflects current config
     // (env vars, ports). Data lives in the bind mount, so this is cheap.
     serverFiles.writeServerSettings(row);
+    // New-map generation settings: written to config/ so the image's `--create`
+    // (GENERATE_NEW_SAVE=true, or first start with no saves) honours them.
+    serverFiles.writeMapGenAndSettings(row);
     // The image reads its RCON password from config/rconpw (ignoring the env var),
     // so write our stored password there so the manager can authenticate.
     serverFiles.writeRconPassword(id, row.rcon_password);
@@ -421,9 +456,17 @@ export class ServerManager {
       throw new ValidationError(`A save named "${name}" already exists`);
     }
     serverFiles.ensureDirs(id);
+    // The one-shot overrides the entrypoint and invokes the binary directly, so the
+    // image's own map-gen handling doesn't run — write the settings and pass them
+    // explicitly so an on-demand new save honours the configured map generation.
+    serverFiles.writeMapGenAndSettings(row);
     const { exitCode, logs } = await this.docker.runOneShot(row, serverFiles.hostDir(id), [
       '--create',
       `/factorio/saves/${name}.zip`,
+      '--map-gen-settings',
+      '/factorio/config/map-gen-settings.json',
+      '--map-settings',
+      '/factorio/config/map-settings.json',
     ]);
     if (exitCode !== 0 || !serverFiles.saveExists(id, name)) {
       throw new DockerError(`save generation failed (exit ${exitCode}): ${logs.slice(-500)}`);

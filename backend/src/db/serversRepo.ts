@@ -99,6 +99,18 @@ export class ServersRepo {
       .run(json, id);
   }
 
+  setMapGenSettingsJson(id: string, json: string): void {
+    this.db
+      .prepare("UPDATE servers SET map_gen_settings_json = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(json, id);
+  }
+
+  setMapSettingsJson(id: string, json: string): void {
+    this.db
+      .prepare("UPDATE servers SET map_settings_json = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(json, id);
+  }
+
   setAppliedModpack(id: string, modpackId: string | null): void {
     this.db
       .prepare("UPDATE servers SET applied_modpack_id = ?, updated_at = datetime('now') WHERE id = ?")

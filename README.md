@@ -132,6 +132,12 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Backups:** on-demand snapshots (kept under the server's `backups/` dir) plus **scheduled
   automatic backups** per server (toggle + interval + keep-newest-N). Backing up a running server
   forces a fresh save via RCON first. List, download, restore (into a save; server stopped), delete.
+- **Map generation:** a **Map gen** tab with the in-game map-generation sliders — resource
+  frequency/size/richness (iron, copper, coal, stone, uranium, oil), water, trees, enemy bases,
+  cliffs, starting-area size, peaceful mode, map seed, plus enemy behaviour toggles (pollution,
+  evolution, expansion). Written to `config/map-gen-settings.json` + `config/map-settings.json` and
+  applied to the **next new map generated** (first start with no save, or a new save from the Saves
+  tab); doesn't alter an existing world.
 - **Server settings:** edit the full `server-settings.json` (visibility, game password, autosave,
   `allow_commands`, AFK kick, pause rules, …) via a structured form plus a raw-JSON escape hatch.
 - **Auto-restart on change:** an optional per-server toggle — when on, saving a change that only
@@ -245,6 +251,7 @@ for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id)
 | GET | `/servers/:id/status` | live state + players |
 | GET | `/servers/:id/logs` | container logs |
 | GET/PUT | `/servers/:id/settings` | full server-settings.json body |
+| GET/PUT | `/servers/:id/mapgen` | map-gen-settings.json + map-settings.json (new-map generation) |
 | GET/PUT | `/servers/:id/{whitelist,adminlist}` · `/global/{whitelist,adminlist}` | per-server / global whitelist + admin list |
 | GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / create / select / download / delete |
 | GET/POST/DELETE | `/servers/:id/backups[...]` | list / create / download / restore / delete |

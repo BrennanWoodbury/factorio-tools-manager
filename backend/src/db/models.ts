@@ -35,6 +35,11 @@ export interface ServerRow {
   auto_backup: number;
   backup_interval_minutes: number;
   backup_keep: number;
+  /** New-map generation settings (map-gen-settings.json). Nullable => image
+   *  defaults. Applied when a new save is generated. Migration v10. */
+  map_gen_settings_json: string | null;
+  /** New-map enemy/pollution settings (map-settings.json). Migration v10. */
+  map_settings_json: string | null;
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */
