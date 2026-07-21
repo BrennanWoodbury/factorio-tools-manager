@@ -5,6 +5,7 @@ import { Dashboard } from './components/Dashboard';
 import { ServerDetail } from './components/ServerDetail';
 import { ModpacksView } from './components/ModpacksView';
 import { ModpackDetail } from './components/ModpackDetail';
+import { NotificationsCenter } from './components/NotificationsCenter';
 import { Toaster } from './ui';
 
 type Tab = 'servers' | 'modpacks';
@@ -61,6 +62,7 @@ export function App() {
           <button className={tab === 'modpacks' ? 'primary' : 'ghost'} onClick={() => go('modpacks')}>
             Modpacks
           </button>
+          <NotificationsCenter />
           <button
             className="ghost"
             onClick={async () => {
