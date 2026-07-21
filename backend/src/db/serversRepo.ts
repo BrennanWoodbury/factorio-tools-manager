@@ -89,6 +89,12 @@ export class ServersRepo {
       .run(json, id);
   }
 
+  setAdminlistJson(id: string, json: string): void {
+    this.db
+      .prepare("UPDATE servers SET adminlist_json = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(json, id);
+  }
+
   setAppliedModpack(id: string, modpackId: string | null): void {
     this.db
       .prepare("UPDATE servers SET applied_modpack_id = ?, updated_at = datetime('now') WHERE id = ?")

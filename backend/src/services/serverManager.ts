@@ -120,6 +120,7 @@ export class ServerManager {
       whitelist_json: null,
       factorio_tag: this.cleanTag(input.factorioTag),
       auto_restart: input.autoRestart ? 1 : 0,
+      adminlist_json: null,
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
@@ -324,6 +325,50 @@ export class ServerManager {
     return this.sanitizeNames([...this.getGlobalWhitelist(), ...this.getServerWhitelist(id)]);
   }
 
+  // ---- Admin list (same shape as the whitelist) ----
+
+  getServerAdminlist(id: string): string[] {
+    const row = this.get(id);
+    if (!row.adminlist_json) return [];
+    try {
+      return JSON.parse(row.adminlist_json) as string[];
+    } catch {
+      return [];
+    }
+  }
+
+  async setServerAdminlist(id: string, names: string[]): Promise<string[]> {
+    this.get(id);
+    const clean = this.sanitizeNames(names);
+    this.repo.setAdminlistJson(id, JSON.stringify(clean));
+    await this.maybeAutoRestart(id, true);
+    return clean;
+  }
+
+  getGlobalAdminlist(): string[] {
+    const raw = kvGet(this.db, 'global_adminlist');
+    if (!raw) return [];
+    try {
+      return JSON.parse(raw) as string[];
+    } catch {
+      return [];
+    }
+  }
+
+  async setGlobalAdminlist(names: string[]): Promise<string[]> {
+    const clean = this.sanitizeNames(names);
+    kvSet(this.db, 'global_adminlist', JSON.stringify(clean));
+    for (const s of this.repo.list()) {
+      await this.maybeAutoRestart(s.id, true);
+    }
+    return clean;
+  }
+
+  /** Effective admin list for a server = global ∪ per-server (deduped). */
+  effectiveAdminlist(id: string): string[] {
+    return this.sanitizeNames([...this.getGlobalAdminlist(), ...this.getServerAdminlist(id)]);
+  }
+
   async start(id: string): Promise<void> {
     const row = this.get(id);
     await this.docker.ensureNetwork();
@@ -333,8 +378,9 @@ export class ServerManager {
     // The image reads its RCON password from config/rconpw (ignoring the env var),
     // so write our stored password there so the manager can authenticate.
     serverFiles.writeRconPassword(id, row.rcon_password);
-    // Effective whitelist = global ∪ per-server. Written (or cleared) each start.
+    // Effective whitelist / admin list = global ∪ per-server. Written each start.
     serverFiles.writeWhitelist(id, this.effectiveWhitelist(id));
+    serverFiles.writeAdminlist(id, this.effectiveAdminlist(id));
     await this.docker.remove(id);
     const containerId = await this.docker.createContainer(row, serverFiles.hostDir(id));
     await this.docker.start(id);

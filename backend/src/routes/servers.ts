@@ -175,6 +175,23 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  // ---- Per-server admin list ----
+
+  r.get(
+    '/:id/adminlist',
+    asyncHandler(async (req, res) => {
+      res.json({ adminlist: manager.getServerAdminlist(req.params.id) });
+    }),
+  );
+
+  r.put(
+    '/:id/adminlist',
+    asyncHandler(async (req, res) => {
+      const body = parse(z.object({ adminlist: z.array(z.string().max(100)) }), req.body);
+      res.json({ adminlist: await manager.setServerAdminlist(req.params.id, body.adminlist) });
+    }),
+  );
+
   // ---- Saves ----
 
   r.get(

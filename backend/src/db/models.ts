@@ -27,6 +27,8 @@ export interface ServerRow {
   factorio_tag: string | null;
   /** 1 = auto-restart on restart-requiring config change. Migration v6. */
   auto_restart: number;
+  /** Per-server admin list as a JSON string array. Migration v7. */
+  adminlist_json: string | null;
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */

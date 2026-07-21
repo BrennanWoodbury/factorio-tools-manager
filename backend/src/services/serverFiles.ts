@@ -155,6 +155,23 @@ export class ServerFilesService {
     fs.writeFileSync(path_, JSON.stringify(names, null, 2));
   }
 
+  // ---- Admin list ----
+
+  adminlistPath(serverId: string): string {
+    return path.join(this.configDir(serverId), 'server-adminlist.json');
+  }
+
+  /** Write the effective admin list to config/server-adminlist.json (empty removes it). */
+  writeAdminlist(serverId: string, names: string[]): void {
+    const p = this.adminlistPath(serverId);
+    if (names.length === 0) {
+      if (fs.existsSync(p)) fs.rmSync(p);
+      return;
+    }
+    this.ensureDirs(serverId);
+    fs.writeFileSync(p, JSON.stringify(names, null, 2));
+  }
+
   // ---- Saves ----
 
   listSaves(serverId: string): { name: string; sizeBytes: number; modifiedAt: string }[] {

@@ -69,5 +69,21 @@ export function globalRouter(ctx: AppContext): Router {
     }),
   );
 
+  r.get(
+    '/adminlist',
+    asyncHandler(async (_req, res) => {
+      res.json({ adminlist: ctx.manager.getGlobalAdminlist() });
+    }),
+  );
+
+  r.put(
+    '/adminlist',
+    asyncHandler(async (req, res) => {
+      const parsed = z.object({ adminlist: z.array(z.string().max(100)) }).safeParse(req.body);
+      if (!parsed.success) throw new ValidationError('adminlist must be an array of names');
+      res.json({ adminlist: await ctx.manager.setGlobalAdminlist(parsed.data.adminlist) });
+    }),
+  );
+
   return r;
 }

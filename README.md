@@ -132,9 +132,9 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   takes effect at start (version/tag, server settings, mods, whitelist) automatically restarts the
   server in the background if it's running (only when a value actually changed); otherwise changes
   apply on the next manual start.
-- **Whitelist:** a per-server player whitelist plus a **global** whitelist that applies to every
-  server. The effective list (global ∪ per-server) is written to `server-whitelist.json` on start;
-  an empty list leaves the server open. Applies on next start/restart.
+- **Whitelist & admin list:** per-server *and* **global** player whitelists and admin lists. Each
+  effective list (global ∪ per-server) is written to `server-whitelist.json` / `server-adminlist.json`
+  on start; an empty whitelist leaves the server open. Applies on next start/restart.
 - **Per-server Factorio version:** each server picks its version from a dropdown — **stable**,
   **latest (experimental)**, or **custom** (any image tag, e.g. `2.0.55`) — overriding just the tag
   of the configured base repo (`FACTORIO_IMAGE`). The image is **pulled on every start/restart** to
@@ -239,7 +239,7 @@ for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id)
 | GET | `/servers/:id/status` | live state + players |
 | GET | `/servers/:id/logs` | container logs |
 | GET/PUT | `/servers/:id/settings` | full server-settings.json body |
-| GET/PUT | `/servers/:id/whitelist` · `/global/whitelist` | per-server / global player whitelist |
+| GET/PUT | `/servers/:id/{whitelist,adminlist}` · `/global/{whitelist,adminlist}` | per-server / global whitelist + admin list |
 | GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / create / select / download / delete |
 | GET/PUT | `/servers/:id/mods` | get / apply mod list |
 | POST | `/servers/:id/mods/{upload,update,deleteAll}` · GET `/mods/export` | mod ops |

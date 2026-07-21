@@ -62,6 +62,13 @@ const MIGRATIONS: Migration[] = [
     // triggers an automatic restart to apply it.
     up: (db) => db.exec('ALTER TABLE servers ADD COLUMN auto_restart INTEGER NOT NULL DEFAULT 0'),
   },
+  {
+    version: 7,
+    // Per-server admin list (JSON array of Factorio usernames). Global admin list
+    // lives in kv; the effective admin list written to server-adminlist.json on
+    // start is the union of the two (mirrors the whitelist).
+    up: (db) => db.exec('ALTER TABLE servers ADD COLUMN adminlist_json TEXT'),
+  },
 ];
 
 export function runMigrations(db: DB): void {

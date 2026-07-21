@@ -11,11 +11,16 @@ export function WhitelistPanel({
   description,
   load,
   save,
+  addLabel = '+ Add player',
+  hint,
 }: {
   title: string;
   description?: string;
   load: () => Promise<string[]>;
   save: (names: string[]) => Promise<string[]>;
+  addLabel?: string;
+  /** Footer text given the current count; defaults to whitelist wording. */
+  hint?: (count: number) => string;
 }) {
   // Keep at least one (empty) row so there's always something to type into.
   const [rows, setRows] = useState<string[]>(['']);
@@ -96,11 +101,13 @@ export function WhitelistPanel({
       </div>
 
       <div className="row" style={{ marginTop: 10, alignItems: 'center' }}>
-        <button onClick={add}>+ Add player</button>
+        <button onClick={add}>{addLabel}</button>
         <span className="small muted">
-          {count === 0
-            ? 'Empty = whitelist off (everyone may join).'
-            : `${count} player${count === 1 ? '' : 's'} whitelisted.`}
+          {hint
+            ? hint(count)
+            : count === 0
+              ? 'Empty = whitelist off (everyone may join).'
+              : `${count} player${count === 1 ? '' : 's'} whitelisted.`}
         </span>
       </div>
     </div>

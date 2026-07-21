@@ -96,6 +96,20 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
         />
       </details>
 
+      <details style={{ marginTop: 8 }}>
+        <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
+          Global admin list (admins on every server)
+        </summary>
+        <WhitelistPanel
+          title="Global admins"
+          description="These Factorio usernames are admins on every server, on top of each server's own admin list. Applies to each server on its next start/restart."
+          addLabel="+ Add admin"
+          hint={(n) => (n === 0 ? 'No global admins.' : `${n} admin${n === 1 ? '' : 's'}.`)}
+          load={async () => (await api.getGlobalAdminlist()).adminlist}
+          save={async (names) => (await api.setGlobalAdminlist(names)).adminlist}
+        />
+      </details>
+
       {showCreate && (
         <CreateServerForm
           dnsEnabled={system?.dns.enabled ?? false}

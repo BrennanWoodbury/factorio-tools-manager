@@ -123,6 +123,15 @@ export function SettingsPanel({
         save={async (names) => (await api.setWhitelist(server.id, names)).whitelist}
       />
 
+      <WhitelistPanel
+        title="Server admins"
+        description="These Factorio usernames are admins on this server (in addition to the global admin list). Applies on next start/restart."
+        addLabel="+ Add admin"
+        hint={(n) => (n === 0 ? 'No admins set.' : `${n} admin${n === 1 ? '' : 's'}.`)}
+        load={async () => (await api.getAdminlist(server.id)).adminlist}
+        save={async (names) => (await api.setAdminlist(server.id, names)).adminlist}
+      />
+
       <div className="panel" style={{ borderColor: 'var(--red)' }}>
         <h2 style={{ color: 'var(--red)' }}>Danger zone</h2>
         <div className="spread">

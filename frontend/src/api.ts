@@ -158,6 +158,14 @@ export const api = {
   setGlobalWhitelist: (whitelist: string[]) =>
     req<{ whitelist: string[] }>('PUT', '/global/whitelist', { whitelist }),
 
+  // admin list (same shape as whitelist)
+  getAdminlist: (id: string) => req<{ adminlist: string[] }>('GET', `/servers/${id}/adminlist`),
+  setAdminlist: (id: string, adminlist: string[]) =>
+    req<{ adminlist: string[] }>('PUT', `/servers/${id}/adminlist`, { adminlist }),
+  getGlobalAdminlist: () => req<{ adminlist: string[] }>('GET', '/global/adminlist'),
+  setGlobalAdminlist: (adminlist: string[]) =>
+    req<{ adminlist: string[] }>('PUT', '/global/adminlist', { adminlist }),
+
   // dns / cloudflare
   getDns: () => req<{ dns: DnsSettings }>('GET', '/global/dns'),
   setDns: (patch: Record<string, unknown>) => req<{ dns: DnsSettings }>('PUT', '/global/dns', patch),
