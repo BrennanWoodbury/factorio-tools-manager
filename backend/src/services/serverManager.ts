@@ -431,6 +431,22 @@ export class ServerManager {
     return { name };
   }
 
+  /**
+   * Restore the server onto a given save: select it (don't generate a new one) and
+   * (re)start so it loads immediately. Starts the server if it was stopped, restarts
+   * it if running. Discards any unsaved progress in the current game.
+   */
+  async restoreFromSave(id: string, saveName: string): Promise<ServerRow> {
+    this.get(id);
+    const name = sanitizeName(saveName);
+    if (!serverFiles.saveExists(id, name)) throw new ValidationError(`No such save "${name}"`);
+    await this.update(id, { saveName: name, generateNewSave: false });
+    // start() recreates the container from scratch, so it loads the selected save
+    // whether the server was previously running or stopped.
+    await this.start(id);
+    return this.get(id);
+  }
+
   // ---- Backups ----
 
   /**

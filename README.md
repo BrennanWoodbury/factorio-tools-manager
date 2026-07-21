@@ -127,7 +127,8 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   releases the ports and deletes the data dir.
 - **Console:** live RCON console + player list (over loopback / Docker network only).
 - **Saves:** upload a `.zip`, list, create a new named save on demand (offline, via a one-shot
-  container), pick which to load next, download, delete.
+  container), pick which to load next, **restore** (load a save now — selects it and (re)starts),
+  download, delete.
 - **Backups:** on-demand snapshots (kept under the server's `backups/` dir) plus **scheduled
   automatic backups** per server (toggle + interval + keep-newest-N). Backing up a running server
   forces a fresh save via RCON first. List, download, restore (into a save; server stopped), delete.

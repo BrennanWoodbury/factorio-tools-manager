@@ -74,6 +74,8 @@ export const api = {
     req<{ name: string; saves: SaveInfo[] }>('POST', `/servers/${id}/saves/create`, { name }),
   selectSave: (id: string, name: string) =>
     req<{ server: Server }>('POST', `/servers/${id}/saves/${encodeURIComponent(name)}/select`),
+  restoreSave: (id: string, name: string) =>
+    req<{ server: Server }>('POST', `/servers/${id}/saves/${encodeURIComponent(name)}/restore`),
   deleteSave: (id: string, name: string) =>
     req<void>('DELETE', `/servers/${id}/saves/${encodeURIComponent(name)}`),
   uploadSave: async (id: string, file: File, name?: string) => {

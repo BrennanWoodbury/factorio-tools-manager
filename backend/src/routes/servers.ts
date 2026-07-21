@@ -248,6 +248,15 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  r.post(
+    '/:id/saves/:name/restore',
+    asyncHandler(async (req, res) => {
+      const name = sanitizeName(req.params.name);
+      const row = await manager.restoreFromSave(req.params.id, name);
+      res.json({ server: dtoOf(row) });
+    }),
+  );
+
   r.delete(
     '/:id/saves/:name',
     asyncHandler(async (req, res) => {

@@ -104,8 +104,32 @@ export function SavesPanel({ server, onChanged }: { server: Server; onChanged: (
                 <td className="small muted">{new Date(s.modifiedAt).toLocaleString()}</td>
                 <td>
                   <div className="row" style={{ justifyContent: 'flex-end' }}>
+                    <button
+                      className="primary small"
+                      title="Load this save now (restarts the server)"
+                      onClick={async () => {
+                        if (
+                          !confirm(
+                            `Restore the server onto "${s.name}"? This (re)starts the server and loads that save — any unsaved progress in the current game is lost.`,
+                          )
+                        )
+                          return;
+                        const ok = await run(
+                          () => api.restoreSave(server.id, s.name),
+                          `Restored — loading "${s.name}"`,
+                        );
+                        if (ok) {
+                          await load();
+                          onChanged();
+                        }
+                      }}
+                    >
+                      Restore
+                    </button>
                     {s.name !== selected && (
                       <button
+                        className="small"
+                        title="Select for the next start (no restart)"
                         onClick={async () => {
                           await run(() => api.selectSave(server.id, s.name), 'Save selected');
                           await load();
@@ -116,10 +140,10 @@ export function SavesPanel({ server, onChanged }: { server: Server; onChanged: (
                       </button>
                     )}
                     <a href={api.downloadSaveUrl(server.id, s.name)}>
-                      <button>Download</button>
+                      <button className="small">Download</button>
                     </a>
                     <button
-                      className="danger"
+                      className="danger small"
                       onClick={async () => {
                         if (!confirm(`Delete save "${s.name}"?`)) return;
                         await run(() => api.deleteSave(server.id, s.name), 'Deleted');
