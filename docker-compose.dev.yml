@@ -55,7 +55,7 @@ services:
     command: sh -c "npm install --no-audit --no-fund && npm run dev"
     environment:
       # Vite proxies /api to the backend service over the compose network.
-      VITE_API_TARGET: http://backend:8080
+      VITE_API_TARGET: "http://backend:${API_PORT:-8080}"
     ports:
       # Browser-facing dev UI. Host side configurable via WEB_PORT.
       - "${WEB_PORT:-5173}:5173"
