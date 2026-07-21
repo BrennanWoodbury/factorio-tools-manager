@@ -97,6 +97,12 @@ const MIGRATIONS: Migration[] = [
       db.exec('ALTER TABLE servers ADD COLUMN map_settings_json TEXT');
     },
   },
+  {
+    version: 11,
+    // Separate retention for manual vs automatic backups: `backup_keep` now applies
+    // to auto backups only, and this new column caps manual backups independently.
+    up: (db) => db.exec('ALTER TABLE servers ADD COLUMN backup_keep_manual INTEGER NOT NULL DEFAULT 10'),
+  },
 ];
 
 export function runMigrations(db: DB): void {

@@ -37,6 +37,7 @@ export interface UpdateServerInput {
   autoBackup?: boolean;
   backupIntervalMinutes?: number;
   backupKeep?: number;
+  backupKeepManual?: number;
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -126,8 +127,9 @@ export class ServerManager {
       adminlist_json: null,
       desired_state: 'stopped',
       auto_backup: 0,
-      backup_interval_minutes: 60,
+      backup_interval_minutes: 15,
       backup_keep: 10,
+      backup_keep_manual: 10,
       map_gen_settings_json:
         input.mapGen && Object.keys(input.mapGen).length > 0 ? JSON.stringify(input.mapGen) : null,
       map_settings_json: null,
@@ -211,6 +213,8 @@ export class ServerManager {
       set('backup_interval_minutes', Math.max(5, Math.floor(input.backupIntervalMinutes)), false);
     if (input.backupKeep !== undefined && input.backupKeep !== current.backup_keep)
       set('backup_keep', Math.max(1, Math.floor(input.backupKeep)), false);
+    if (input.backupKeepManual !== undefined && input.backupKeepManual !== current.backup_keep_manual)
+      set('backup_keep_manual', Math.max(1, Math.floor(input.backupKeepManual)), false);
 
     let subdomainChanged = false;
     if (input.subdomain !== undefined && input.subdomain !== current.subdomain) {
@@ -489,10 +493,17 @@ export class ServerManager {
 
   /**
    * Create a backup of a save. If the server is running, first force a fresh save
-   * over RCON (best-effort) so the backup captures current state. Backs up the
-   * given save, or the newest one. Prunes to the server's keep count.
+   * over RCON (best-effort) so the backup captures current state. Backs up the given
+   * save, or the newest one. `kind` tags it manual vs auto and selects which
+   * retention window it's pruned against — manual and auto never evict each other.
+   * Only 'auto' advances the scheduler clock, so a manual backup doesn't delay the
+   * next scheduled one.
    */
-  async backupNow(id: string, saveName?: string): Promise<{ name: string; source: string }> {
+  async backupNow(
+    id: string,
+    saveName?: string,
+    kind: 'manual' | 'auto' = 'manual',
+  ): Promise<{ name: string; source: string }> {
     const row = this.get(id);
     let cs;
     try {
@@ -510,9 +521,9 @@ export class ServerManager {
     }
     const source = saveName ?? serverFiles.latestSaveName(id);
     if (!source) throw new ValidationError('No save available to back up');
-    const name = serverFiles.backupSave(id, source);
-    serverFiles.pruneBackups(id, row.backup_keep);
-    kvSet(this.db, `backup_last_${id}`, String(Date.now()));
+    const name = serverFiles.backupSave(id, source, kind);
+    serverFiles.pruneBackups(id, kind, kind === 'auto' ? row.backup_keep : row.backup_keep_manual);
+    if (kind === 'auto') kvSet(this.db, `backup_last_${id}`, String(Date.now()));
     return { name, source };
   }
 
@@ -545,7 +556,7 @@ export class ServerManager {
       const last = Number(kvGet(this.db, `backup_last_${row.id}`) ?? 0);
       if (now - last < row.backup_interval_minutes * 60_000) continue;
       try {
-        const { name } = await this.backupNow(row.id);
+        const { name } = await this.backupNow(row.id, undefined, 'auto');
         console.log(`[backup] auto-backed up ${row.subdomain}: ${name}`);
       } catch (err) {
         console.warn(`[backup] auto-backup of ${row.id} failed: ${(err as Error).message}`);

@@ -31,10 +31,12 @@ export interface ServerRow {
   adminlist_json: string | null;
   /** User's intended run state: 'running' | 'stopped'. Migration v8. */
   desired_state: string;
-  /** Scheduled backups. Migration v9. */
+  /** Scheduled backups. Migration v9. `backup_keep` = auto-backup retention. */
   auto_backup: number;
   backup_interval_minutes: number;
   backup_keep: number;
+  /** Manual-backup retention (separate from auto). Migration v11. */
+  backup_keep_manual: number;
   /** New-map generation settings (map-gen-settings.json). Nullable => image
    *  defaults. Applied when a new save is generated. Migration v10. */
   map_gen_settings_json: string | null;
@@ -65,6 +67,7 @@ export interface ServerDto {
   autoBackup: boolean;
   backupIntervalMinutes: number;
   backupKeep: number;
+  backupKeepManual: number;
   /** Resolved Docker image the server will run (repo:tag). */
   factorioImage?: string;
   /** Fully-qualified connect hostname players use, when DNS is enabled. */
@@ -98,6 +101,7 @@ export function toDto(
     autoBackup: row.auto_backup === 1,
     backupIntervalMinutes: row.backup_interval_minutes,
     backupKeep: row.backup_keep,
+    backupKeepManual: row.backup_keep_manual,
     factorioImage,
     connectHost,
   };

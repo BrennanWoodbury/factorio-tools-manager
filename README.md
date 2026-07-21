@@ -135,9 +135,12 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Saves:** upload a `.zip`, list, create a new named save on demand (offline, via a one-shot
   container), pick which to load next, **restore** (load a save now — selects it and (re)starts),
   download, delete.
-- **Backups:** on-demand snapshots (kept under the server's `backups/` dir) plus **scheduled
-  automatic backups** per server (toggle + interval + keep-newest-N). Backing up a running server
-  forces a fresh save via RCON first. List, download, restore (into a save; server stopped), delete.
+- **Backups:** on-demand ("manual") snapshots (kept under the server's `backups/` dir) plus
+  **scheduled automatic backups** per server (toggle + interval, default every 15 min). Manual and
+  auto backups have **separate keep-newest-N retention** — one never evicts the other, and a manual
+  backup doesn't reset the auto schedule. Backing up a running server forces a fresh save via RCON
+  first. Each backup can be downloaded, restored ("Restore from here" — into a save; server stopped),
+  or deleted from the UI.
 - **Map generation:** the in-game map-generation sliders — resource frequency/size/richness (iron,
   copper, coal, stone, uranium, oil), water, trees, enemy bases, cliffs, starting-area size,
   peaceful mode and map seed — available **in the create-server wizard** and on a per-server **Map

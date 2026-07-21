@@ -17,6 +17,7 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
   const [auto, setAuto] = useState(server.autoBackup);
   const [interval, setIntervalMin] = useState(server.backupIntervalMinutes);
   const [keep, setKeep] = useState(server.backupKeep);
+  const [keepManual, setKeepManual] = useState(server.backupKeepManual);
   const [savingCfg, setSavingCfg] = useState(false);
 
   const load = useCallback(async () => {
@@ -49,6 +50,7 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
           autoBackup: auto,
           backupIntervalMinutes: interval,
           backupKeep: keep,
+          backupKeepManual: keepManual,
         }),
       'Backup settings saved',
     );
@@ -66,11 +68,12 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
       </div>
       <div className="small muted" style={{ marginBottom: 12 }}>
         Snapshots of a save kept under the server's <span className="mono">backups/</span> dir. Backing
-        up a running server forces a fresh save first.
+        up a running server forces a fresh save first. Manual and automatic backups have separate
+        retention — one never evicts the other, and a manual backup doesn't delay the auto schedule.
       </div>
 
-      {/* Auto-backup settings */}
-      <div className="row" style={{ alignItems: 'flex-end', gap: 14, marginBottom: 6 }}>
+      {/* Backup settings */}
+      <div className="row" style={{ alignItems: 'flex-end', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
           <input
             type="checkbox"
@@ -85,19 +88,29 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
           <input
             type="number"
             min={5}
-            style={{ width: 110 }}
+            style={{ width: 100 }}
             value={interval}
             onChange={(e) => setIntervalMin(Number(e.target.value))}
           />
         </div>
         <div>
-          <label>Keep (newest N)</label>
+          <label>Keep auto (N)</label>
           <input
             type="number"
             min={1}
-            style={{ width: 110 }}
+            style={{ width: 100 }}
             value={keep}
             onChange={(e) => setKeep(Number(e.target.value))}
+          />
+        </div>
+        <div>
+          <label>Keep manual (N)</label>
+          <input
+            type="number"
+            min={1}
+            style={{ width: 100 }}
+            value={keepManual}
+            onChange={(e) => setKeepManual(Number(e.target.value))}
           />
         </div>
         <button disabled={savingCfg} onClick={() => void saveCfg()}>
@@ -113,7 +126,7 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
         <table style={{ marginTop: 12 }}>
           <thead>
             <tr>
-              <th>Backup</th>
+              <th>Type</th>
               <th>Save</th>
               <th>Size</th>
               <th>Created</th>
@@ -123,7 +136,12 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
           <tbody>
             {backups.map((b) => (
               <tr key={b.name}>
-                <td className="mono small">{b.name}</td>
+                <td>
+                  <span className={`badge ${b.kind === 'auto' ? 'running' : 'stopped'}`}>
+                    <span className="dot" />
+                    {b.kind === 'auto' ? 'Auto' : 'Manual'}
+                  </span>
+                </td>
                 <td className="mono">{b.source}</td>
                 <td>{fmtSize(b.sizeBytes)}</td>
                 <td className="small muted">{new Date(b.createdAt).toLocaleString()}</td>
@@ -151,7 +169,7 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
                         }
                       }}
                     >
-                      Restore
+                      Restore from here
                     </button>
                     <button
                       className="danger small"

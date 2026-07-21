@@ -10,6 +10,17 @@ export interface ModEntry {
   version?: string;
 }
 
+/** Whether a backup was made on demand ('manual') or by the scheduler ('auto'). */
+export type BackupKind = 'manual' | 'auto';
+
+export interface BackupInfo {
+  name: string;
+  source: string;
+  kind: BackupKind;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 /**
  * Manages the on-disk data directory for each server. The manager reads/writes
  * via its own local mount (`serversDir/<id>`); the *same* directory is bind-
@@ -266,20 +277,21 @@ export class ServerFilesService {
   }
 
   /**
-   * Copy a save into backups/ as `<save>__<timestamp>.zip`. Returns the backup name.
-   * The `<save>__` prefix lets restore recover the original save name.
+   * Copy a save into backups/ as `<save>__<kind>-<timestamp>.zip`. Returns the backup
+   * name. The `<save>__` prefix lets restore recover the original save name; the
+   * `<kind>-` prefix on the rest tags it manual vs auto for separate retention.
    */
-  backupSave(serverId: string, saveName: string): string {
+  backupSave(serverId: string, saveName: string, kind: BackupKind = 'manual'): string {
     const src = this.savePath(serverId, saveName);
     if (!fs.existsSync(src)) throw new NotFoundError(`Save "${saveName}"`);
     fs.mkdirSync(this.backupsDir(serverId), { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
-    const name = `${sanitizeName(saveName)}__${ts}`;
+    const name = `${sanitizeName(saveName)}__${kind}-${ts}`;
     fs.copyFileSync(src, this.backupPath(serverId, name));
     return name;
   }
 
-  listBackups(serverId: string): { name: string; source: string; sizeBytes: number; createdAt: string }[] {
+  listBackups(serverId: string): BackupInfo[] {
     const dir = this.backupsDir(serverId);
     if (!fs.existsSync(dir)) return [];
     return fs
@@ -287,13 +299,9 @@ export class ServerFilesService {
       .filter((f) => f.endsWith('.zip'))
       .map((f) => {
         const name = f.replace(/\.zip$/, '');
+        const { source, kind } = parseBackupName(name);
         const stat = fs.statSync(path.join(dir, f));
-        return {
-          name,
-          source: name.split('__')[0],
-          sizeBytes: stat.size,
-          createdAt: stat.mtime.toISOString(),
-        };
+        return { name, source, kind, sizeBytes: stat.size, createdAt: stat.mtime.toISOString() };
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -313,16 +321,16 @@ export class ServerFilesService {
   restoreBackup(serverId: string, backupName: string): string {
     const p = this.backupPath(serverId, backupName);
     if (!fs.existsSync(p)) throw new NotFoundError(`Backup "${backupName}"`);
-    const source = sanitizeName(backupName.split('__')[0] || backupName);
+    const source = sanitizeName(parseBackupName(backupName).source || backupName);
     this.ensureDirs(serverId);
     fs.copyFileSync(p, this.savePath(serverId, source));
     return source;
   }
 
-  /** Keep only the newest `keep` backups; delete the rest. */
-  pruneBackups(serverId: string, keep: number): number {
+  /** Keep only the newest `keep` backups of a given kind; delete the rest of that kind. */
+  pruneBackups(serverId: string, kind: BackupKind, keep: number): number {
     if (keep <= 0) return 0;
-    const backups = this.listBackups(serverId); // newest-first
+    const backups = this.listBackups(serverId).filter((b) => b.kind === kind); // newest-first
     const stale = backups.slice(keep);
     for (const b of stale) this.deleteBackup(serverId, b.name);
     return stale.length;
@@ -453,6 +461,18 @@ function deepMerge(
     out[k] = isPlainObject(cur) && isPlainObject(v) ? deepMerge(cur, v) : v;
   }
   return out;
+}
+
+/**
+ * Split a backup name into its source save + kind. Names are `<source>__<kind>-<ts>`
+ * (new) or `<source>__<ts>` (legacy — treated as 'manual', so a pre-tag backup is
+ * kept under manual retention rather than auto-pruned aggressively).
+ */
+function parseBackupName(name: string): { source: string; kind: BackupKind } {
+  const i = name.indexOf('__');
+  const source = i >= 0 ? name.slice(0, i) : name;
+  const rest = i >= 0 ? name.slice(i + 2) : '';
+  return { source, kind: rest.startsWith('auto-') ? 'auto' : 'manual' };
 }
 
 /** Prevent path traversal / illegal filename chars in user-supplied save names. */

@@ -35,6 +35,10 @@ const updateSchema = z.object({
   generateNewSave: z.boolean().optional(),
   factorioTag: z.string().max(128).optional(),
   autoRestart: z.boolean().optional(),
+  autoBackup: z.boolean().optional(),
+  backupIntervalMinutes: z.number().int().min(5).max(10080).optional(),
+  backupKeep: z.number().int().min(1).max(1000).optional(),
+  backupKeepManual: z.number().int().min(1).max(1000).optional(),
 });
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {

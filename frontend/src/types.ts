@@ -19,6 +19,7 @@ export interface Server {
   autoBackup: boolean;
   backupIntervalMinutes: number;
   backupKeep: number;
+  backupKeepManual: number;
   factorioImage?: string;
   connectHost?: string;
 }
@@ -50,6 +51,7 @@ export interface MapGenTemplateDetail extends MapGenTemplate {
 export interface BackupInfo {
   name: string;
   source: string;
+  kind: 'manual' | 'auto';
   sizeBytes: number;
   createdAt: string;
 }
