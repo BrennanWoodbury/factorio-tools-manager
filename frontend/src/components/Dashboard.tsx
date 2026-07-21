@@ -5,6 +5,7 @@ import { CreateServerForm } from './CreateServerForm';
 import { StatusBadge } from './StatusBadge';
 import { WhitelistPanel } from './WhitelistPanel';
 import { DnsSettingsPanel } from './DnsSettingsPanel';
+import { LifecycleControls } from './LifecycleControls';
 
 export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
   const [servers, setServers] = useState<Server[]>([]);
@@ -72,6 +73,7 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
                 </span>
               )}
               <StatusBadge running={running} />
+              <LifecycleControls id={s.id} running={running} onChanged={refresh} small />
             </div>
           </div>
         );

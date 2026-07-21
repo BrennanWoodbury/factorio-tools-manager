@@ -6,7 +6,8 @@ import { Console } from './Console';
 import { SavesPanel } from './SavesPanel';
 import { ModsPanel } from './ModsPanel';
 import { SettingsPanel } from './SettingsPanel';
-import { run, toastError } from '../ui';
+import { LifecycleControls } from './LifecycleControls';
+import { toastError } from '../ui';
 
 type Tab = 'overview' | 'console' | 'saves' | 'mods' | 'settings';
 
@@ -14,7 +15,6 @@ export function ServerDetail({ id, onBack }: { id: string; onBack: () => void })
   const [server, setServer] = useState<Server | null>(null);
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -34,13 +34,6 @@ export function ServerDetail({ id, onBack }: { id: string; onBack: () => void })
 
   if (!server) return <div className="muted">Loading…</div>;
   const running = status?.running ?? server.status === 'running';
-
-  const action = async (fn: () => Promise<unknown>, ok: string) => {
-    setBusy(true);
-    await run(fn, ok);
-    await load();
-    setBusy(false);
-  };
 
   return (
     <>
@@ -62,26 +55,7 @@ export function ServerDetail({ id, onBack }: { id: string; onBack: () => void })
               game port {server.gamePort} · rcon 127.0.0.1:{server.rconPort} (loopback)
             </div>
           </div>
-          <div className="row">
-            {running ? (
-              <>
-                <button disabled={busy} onClick={() => action(() => api.restart(id), 'Restarted')}>
-                  Restart
-                </button>
-                <button disabled={busy} onClick={() => action(() => api.stop(id), 'Stopped')}>
-                  Stop
-                </button>
-              </>
-            ) : (
-              <button
-                className="primary"
-                disabled={busy}
-                onClick={() => action(() => api.start(id), 'Started')}
-              >
-                Start
-              </button>
-            )}
-          </div>
+          <LifecycleControls id={id} running={running} onChanged={load} />
         </div>
         {running && status?.players && (
           <div className="small muted" style={{ marginTop: 10 }}>

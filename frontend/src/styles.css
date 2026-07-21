@@ -64,6 +64,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 button.primary { background: var(--accent); color: #201400; border-color: var(--accent); font-weight: 600; }
 button.danger { border-color: var(--red); color: var(--red); }
 button.ghost { background: transparent; }
+button.small { padding: 4px 10px; font-size: 12px; }
 
 input, textarea, select {
   background: var(--bg);
@@ -121,3 +122,18 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
 
 .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
 .login-box { width: 340px; }
+
+/* Lifecycle controls with a busy overlay */
+.lifecycle { position: relative; display: inline-flex; gap: 8px; }
+.lifecycle.busy button { opacity: 0.45; pointer-events: none; }
+.lifecycle-overlay {
+  position: absolute; inset: -2px; display: flex; align-items: center; justify-content: center;
+  background: rgba(20, 23, 28, 0.35); border-radius: 8px;
+}
+.spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite; display: inline-block;
+}
+.spinner.lg { width: 22px; height: 22px; border-width: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
