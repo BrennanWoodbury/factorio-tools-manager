@@ -20,11 +20,18 @@ export function SettingsPanel({
   const [description, setDescription] = useState(server.description);
   const [modUser, setModUser] = useState('');
   const [modToken, setModToken] = useState('');
+  const [factorioTag, setFactorioTag] = useState(server.factorioTag);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     setBusy(true);
-    const patch: Record<string, unknown> = { name, subdomain, maxPlayers, description };
+    const patch: Record<string, unknown> = {
+      name,
+      subdomain,
+      maxPlayers,
+      description,
+      factorioTag,
+    };
     if (modUser) patch.factorioUsername = modUser;
     if (modToken) patch.factorioToken = modToken;
     await run(() => api.updateServer(server.id, patch), 'Settings saved');
@@ -56,6 +63,19 @@ export function SettingsPanel({
 
         <label>Description</label>
         <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+
+        <label>Factorio version (image tag — blank = server default)</label>
+        <input
+          className="mono"
+          value={factorioTag}
+          onChange={(e) => setFactorioTag(e.target.value)}
+          placeholder="stable"
+        />
+        <div className="small muted" style={{ marginTop: 4 }}>
+          Runs <span className="mono">{server.factorioImage ?? 'the default image'}</span>. Change
+          the tag (e.g. <span className="mono">latest</span>, <span className="mono">2.0.55</span>);
+          the new image is pulled on next start.
+        </div>
 
         <details style={{ marginTop: 12 }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>

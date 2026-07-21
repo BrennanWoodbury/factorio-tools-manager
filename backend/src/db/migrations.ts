@@ -50,6 +50,12 @@ const MIGRATIONS: Migration[] = [
     // server-whitelist.json on start is the union of the two.
     up: (db) => db.exec('ALTER TABLE servers ADD COLUMN whitelist_json TEXT'),
   },
+  {
+    version: 5,
+    // Per-server Factorio image tag (e.g. 'stable', 'latest', '2.0.55'). Empty =>
+    // use the global FACTORIO_IMAGE. Applied to the base repo of FACTORIO_IMAGE.
+    up: (db) => db.exec('ALTER TABLE servers ADD COLUMN factorio_tag TEXT'),
+  },
 ];
 
 export function runMigrations(db: DB): void {

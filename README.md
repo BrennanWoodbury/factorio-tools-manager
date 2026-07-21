@@ -104,7 +104,7 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 | `HOST_SERVERS_DIR`      |          | `DATA_DIR/servers`             | Host bind-mount source; auto-correct via the identity mount |
 | `GAME_PORT_RANGE`       |          | `34197-34297`                  | Pre-forwarded UDP game-port pool |
 | `RCON_PORT_RANGE`       |          | `27015-27115`                  | Loopback-only RCON port pool |
-| `FACTORIO_IMAGE`        |          | `factoriotools/factorio:stable`| Base game server image |
+| `FACTORIO_IMAGE`        |          | `factoriotools/factorio:stable`| Base game server image; per-server tag overrides just the tag |
 | `FACTORIO_NETWORK`      |          | `factorio-net`                 | Shared Docker network for manager↔RCON |
 | `RCON_MODE`             |          | `network`                      | `network` (containerized) or `loopback` (local dev) |
 | `PUID` / `PGID`         |          | `845`                          | UID/GID the Factorio image runs as |
@@ -131,6 +131,9 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Whitelist:** a per-server player whitelist plus a **global** whitelist that applies to every
   server. The effective list (global ∪ per-server) is written to `server-whitelist.json` on start;
   an empty list leaves the server open. Applies on next start/restart.
+- **Per-server Factorio version:** each server can pin its own image tag (e.g. one on `stable`,
+  another on `latest` or `2.0.55`). Blank uses the global `FACTORIO_IMAGE`. The tag overrides just
+  the tag of the configured base repo, and the image is auto-pulled on start if not present.
 - **Mods:** search the Factorio Mod Portal by keyword and add mods with one click; upload a mod
   `.zip` manually; enable/disable; update all to latest; delete all; export a shareable manifest.
   With mod-portal credentials, enabled mods are downloaded on save. Changes apply on next start.

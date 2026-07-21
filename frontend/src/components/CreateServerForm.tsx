@@ -17,6 +17,7 @@ export function CreateServerForm({
   const [description, setDescription] = useState('');
   const [modUser, setModUser] = useState('');
   const [modToken, setModToken] = useState('');
+  const [factorioTag, setFactorioTag] = useState('');
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -31,6 +32,7 @@ export function CreateServerForm({
         generateNewSave: true,
         factorioUsername: modUser || undefined,
         factorioToken: modToken || undefined,
+        factorioTag: factorioTag.trim() || undefined,
       });
       toastSuccess(`Created "${server.name}"`);
       onCreated(server.id);
@@ -93,6 +95,18 @@ export function CreateServerForm({
 
         <label>Description</label>
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+
+        <label>Factorio version (image tag — blank = server default)</label>
+        <input
+          className="mono"
+          value={factorioTag}
+          onChange={(e) => setFactorioTag(e.target.value)}
+          placeholder="stable"
+        />
+        <div className="small muted" style={{ marginTop: 4 }}>
+          e.g. <span className="mono">stable</span>, <span className="mono">latest</span>, or a pinned
+          version like <span className="mono">2.0.55</span>.
+        </div>
 
         <details style={{ marginTop: 12 }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>

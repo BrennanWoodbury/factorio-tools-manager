@@ -19,6 +19,7 @@ export interface CreateServerInput {
   generateNewSave?: boolean;
   factorioUsername?: string;
   factorioToken?: string;
+  factorioTag?: string;
   mods?: ModEntry[];
 }
 
@@ -31,9 +32,12 @@ export interface UpdateServerInput {
   generateNewSave?: boolean;
   factorioUsername?: string;
   factorioToken?: string;
+  factorioTag?: string;
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+// Valid Docker image tag (also allow empty to mean "use the global default").
+const TAG_RE = /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}$/;
 
 /**
  * Orchestrates a server's whole lifecycle across the allocator, Docker, DNS and
@@ -57,6 +61,15 @@ export class ServerManager {
         'Subdomain must be a valid DNS label: lowercase letters, digits and hyphens',
       );
     }
+  }
+
+  /** Validate an image tag; returns the trimmed tag ('' means default). */
+  private cleanTag(tag: string | undefined): string {
+    const t = (tag ?? '').trim();
+    if (t !== '' && !TAG_RE.test(t)) {
+      throw new ValidationError('Factorio tag must be a valid Docker image tag (e.g. stable, 2.0.55)');
+    }
+    return t;
   }
 
   list(): ServerRow[] {
@@ -103,6 +116,7 @@ export class ServerManager {
       settings_json: null,
       applied_modpack_id: null,
       whitelist_json: null,
+      factorio_tag: this.cleanTag(input.factorioTag),
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
@@ -151,6 +165,7 @@ export class ServerManager {
     if (input.generateNewSave !== undefined) fields.generate_new_save = input.generateNewSave ? 1 : 0;
     if (input.factorioUsername !== undefined) fields.factorio_username = input.factorioUsername;
     if (input.factorioToken !== undefined) fields.factorio_token = input.factorioToken;
+    if (input.factorioTag !== undefined) fields.factorio_tag = this.cleanTag(input.factorioTag);
 
     let subdomainChanged = false;
     if (input.subdomain !== undefined && input.subdomain !== current.subdomain) {

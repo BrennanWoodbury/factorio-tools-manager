@@ -23,6 +23,8 @@ export interface ServerRow {
   applied_modpack_id: string | null;
   /** Per-server player whitelist as a JSON string array. Migration v4. */
   whitelist_json: string | null;
+  /** Per-server Factorio image tag; empty/null => global default. Migration v5. */
+  factorio_tag: string | null;
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */
@@ -42,11 +44,15 @@ export interface ServerDto {
   createdAt: string;
   updatedAt: string;
   appliedModpackId: string | null;
+  /** Per-server image tag ('' = global default). */
+  factorioTag: string;
+  /** Resolved Docker image the server will run (repo:tag). */
+  factorioImage?: string;
   /** Fully-qualified connect hostname players use, when DNS is enabled. */
   connectHost?: string;
 }
 
-export function toDto(row: ServerRow, connectHost?: string): ServerDto {
+export function toDto(row: ServerRow, connectHost?: string, factorioImage?: string): ServerDto {
   return {
     id: row.id,
     name: row.name,
@@ -63,6 +69,8 @@ export function toDto(row: ServerRow, connectHost?: string): ServerDto {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     appliedModpackId: row.applied_modpack_id ?? null,
+    factorioTag: row.factorio_tag ?? '',
+    factorioImage,
     connectHost,
   };
 }

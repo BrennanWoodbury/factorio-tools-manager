@@ -19,6 +19,7 @@ const createSchema = z.object({
   generateNewSave: z.boolean().optional(),
   factorioUsername: z.string().max(100).optional(),
   factorioToken: z.string().max(200).optional(),
+  factorioTag: z.string().max(128).optional(),
   mods: z.array(modEntrySchema).optional(),
 });
 
@@ -31,6 +32,7 @@ const updateSchema = z.object({
   generateNewSave: z.boolean().optional(),
   factorioUsername: z.string().max(100).optional(),
   factorioToken: z.string().max(200).optional(),
+  factorioTag: z.string().max(128).optional(),
 });
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
@@ -47,7 +49,8 @@ export function serversRouter(ctx: AppContext): Router {
   // Save files can be large; cap at 1 GiB and buffer in memory (single-host tool).
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024 * 1024 } });
 
-  const dtoOf = (row: Parameters<typeof toDto>[0]) => toDto(row, manager.connectHost(row));
+  const dtoOf = (row: Parameters<typeof toDto>[0]) =>
+    toDto(row, manager.connectHost(row), ctx.docker.imageFor(row));
 
   // ---- CRUD ----
 
@@ -222,7 +225,7 @@ export function serversRouter(ctx: AppContext): Router {
       if (!serverFiles.saveExists(row.id, name)) throw new ValidationError(`No such save "${name}"`);
       // Selecting an existing save means: load it, don't generate a new one.
       const updated = await manager.update(row.id, { saveName: name, generateNewSave: false });
-      res.json({ server: toDto(updated, manager.connectHost(updated)) });
+      res.json({ server: dtoOf(updated) });
     }),
   );
 
