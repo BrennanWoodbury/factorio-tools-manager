@@ -79,6 +79,16 @@ export interface ApplyResult {
   errors: { name: string; error: string }[];
 }
 
+export interface DnsSettings {
+  baseDomain: string;
+  hostRecordName: string;
+  cloudflareZoneId: string;
+  hasToken: boolean;
+  ddnsIntervalSeconds: number;
+  ipCheckUrl: string;
+  enabled: boolean;
+}
+
 export interface SystemStatus {
   docker: { ok: boolean; error?: string };
   dns: { enabled: boolean; baseDomain: string | null; hostRecord: string | null };

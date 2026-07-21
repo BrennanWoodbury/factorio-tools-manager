@@ -1,11 +1,14 @@
-import type { AppConfig } from '../config.js';
 import type { DnsService } from '../services/dnsService.js';
 
 /**
- * Dynamic-DNS job. On a fixed interval it asks an external "what's my IP" service
- * for the host's current public IP and, if it changed, updates the single shared
+ * Dynamic-DNS job. On an interval it asks an external "what's my IP" service for
+ * the host's current public IP and, if it changed, updates the single shared
  * `host.<base>` A record. Every server's SRV record targets that name, so one
  * update follows the WAN IP for all servers at once.
+ *
+ * Interval and IP-check URL come from the DB-backed DNS settings, so `reschedule()`
+ * (called after the settings change) restarts the job with current values and
+ * starts/stops it as DNS is enabled/disabled.
  */
 export class DdnsJob {
   private timer?: NodeJS.Timeout;
@@ -14,13 +17,11 @@ export class DdnsJob {
   private lastIp?: string;
   private lastCheck?: string;
 
-  constructor(
-    private readonly dns: DnsService,
-    private readonly config: AppConfig,
-  ) {}
+  constructor(private readonly dns: DnsService) {}
 
   private async detectPublicIp(): Promise<string> {
-    const res = await fetch(this.config.ipCheckUrl, { signal: AbortSignal.timeout(10_000) });
+    const { ipCheckUrl } = this.dns.settings();
+    const res = await fetch(ipCheckUrl, { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) throw new Error(`IP check returned HTTP ${res.status}`);
     const text = (await res.text()).trim();
     // Accept a bare IPv4 (api.ipify.org default response).
@@ -47,19 +48,28 @@ export class DdnsJob {
 
   start(): void {
     if (!this.dns.enabled) {
-      console.log('[ddns] DNS disabled — DDNS job not started');
+      console.log('[ddns] DNS not configured — DDNS job idle');
       return;
     }
     if (this.running) return;
     this.running = true;
-    // Fire once shortly after boot, then on the configured interval.
+    const intervalMs = this.dns.settings().ddnsIntervalSeconds * 1000;
+    // Fire once shortly after start, then on the configured interval.
     void this.runOnce();
-    this.timer = setInterval(() => void this.runOnce(), this.config.ddnsIntervalMs);
+    this.timer = setInterval(() => void this.runOnce(), intervalMs);
+    console.log(`[ddns] started (every ${this.dns.settings().ddnsIntervalSeconds}s)`);
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    this.timer = undefined;
     this.running = false;
+  }
+
+  /** Restart with current settings (call after DNS settings change). */
+  reschedule(): void {
+    this.stop();
+    this.start();
   }
 
   status() {
@@ -69,7 +79,7 @@ export class DdnsJob {
       lastIp: this.lastIp,
       lastCheck: this.lastCheck,
       lastError: this.lastError,
-      intervalSeconds: this.config.ddnsIntervalMs / 1000,
+      intervalSeconds: this.dns.settings().ddnsIntervalSeconds,
     };
   }
 }

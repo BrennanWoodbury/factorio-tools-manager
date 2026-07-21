@@ -11,8 +11,8 @@
 # daemon (socket mounted) and joins `factorio-net`, so it reaches their RCON over
 # the Docker network (RCON_MODE=network) — same wiring as production.
 #
-# Open http://localhost:5173. DNS/DDNS is off unless you add the CLOUDFLARE_* vars,
-# so servers connect by IP:port (Factorio → Connect to address → localhost:<port>).
+# Open http://localhost:5173. DNS/DDNS is configured in the dashboard (Cloudflare);
+# until you set it, servers connect by IP:port (Factorio → Connect to address).
 
 services:
   backend:
@@ -31,12 +31,6 @@ services:
       RCON_MODE: network
       # If file changes aren't picked up on your filesystem, force polling:
       # CHOKIDAR_USEPOLLING: "true"
-      #
-      # DNS automation (optional) — uncomment and fill to test the SRV/DDNS flow:
-      # CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
-      # CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
-      # BASE_DOMAIN: ${BASE_DOMAIN:-}
-      # HOST_RECORD_NAME: ${HOST_RECORD_NAME:-}
     ports:
       # API on the host (handy for curl; the UI reaches it internally via the Vite
       # proxy at backend:8080). Host side configurable via API_PORT.

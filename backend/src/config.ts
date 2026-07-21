@@ -38,12 +38,6 @@ function parseRange(name: string, fallback: string): [number, number] {
   return [start, end];
 }
 
-// DNS automation is optional so the app can run in a pure-local/dev mode where
-// you connect by IP:port. When CLOUDFLARE_API_TOKEN is unset, DNS + DDNS are
-// disabled and server records simply aren't created.
-const cloudflareToken = process.env.CLOUDFLARE_API_TOKEN ?? '';
-const dnsEnabled = cloudflareToken !== '';
-
 export const config = {
   port: intOpt('PORT', 8080),
   dataDir: path.resolve(opt('DATA_DIR', path.resolve(process.cwd(), '../data'))),
@@ -81,14 +75,8 @@ export const config = {
   // differ, so it's configured explicitly. Defaults to DATA_DIR/servers.
   hostServersDir: opt('HOST_SERVERS_DIR', path.resolve(opt('DATA_DIR', path.resolve(process.cwd(), '../data')), 'servers')),
 
-  // DNS / DDNS (Cloudflare)
-  dnsEnabled,
-  cloudflareToken,
-  cloudflareZoneId: opt('CLOUDFLARE_ZONE_ID', ''),
-  baseDomain: opt('BASE_DOMAIN', ''), // e.g. mydomain.com
-  hostRecordName: opt('HOST_RECORD_NAME', ''), // e.g. host.mydomain.com (SRV target + A record)
-  ddnsIntervalMs: intOpt('DDNS_INTERVAL_SECONDS', 300) * 1000,
-  ipCheckUrl: opt('IP_CHECK_URL', 'https://api.ipify.org'),
+  // DNS / DDNS (Cloudflare) is configured entirely from the dashboard and stored
+  // in the DB (see services/dnsSettings.ts) — there are no DNS env vars.
 } as const;
 
 export type AppConfig = typeof config;

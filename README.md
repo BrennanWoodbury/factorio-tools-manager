@@ -60,15 +60,17 @@ host's LAN IP, using the **same** external and internal ports:
 Do **not** forward the RCON range. The app never allocates a game port outside this range, so any
 server it creates is guaranteed reachable.
 
-### 2. Cloudflare API token (optional — enables DNS automation)
+### 2. Cloudflare DNS (optional — configured in the dashboard, not env)
 
-Skip this to run without DNS (players connect by `IP:port`). To enable automatic SRV + DDNS:
+Skip this to run without DNS (players connect by `IP:port`). To enable automatic SRV + DDNS,
+open the dashboard → **DNS / Cloudflare settings** and enter your base domain, host record, Zone
+ID and API token (with a **Test connection** button). It saves to the app's database and takes
+effect immediately — no restart, nothing in `.env`. To get the values:
 
 1. Your domain's DNS must be managed by Cloudflare.
 2. Create an API token at **Cloudflare → My Profile → API Tokens → Create Token → Custom token**
-   with:
-   - **Permissions:** `Zone` → `DNS` → `Edit`
-   - **Zone Resources:** `Include` → `Specific zone` → *your domain*
+   with **Permissions:** `Zone` → `DNS` → `Edit`, **Zone Resources:** `Include` → `Specific zone`
+   → *your domain*.
 3. Find your **Zone ID** on the domain's Cloudflare overview page.
 
 The app creates DNS-only (unproxied) records — it never enables the orange-cloud proxy, which
@@ -108,12 +110,10 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 | `FACTORIO_NETWORK`      |          | `factorio-net`                 | Shared Docker network for manager↔RCON |
 | `RCON_MODE`             |          | `network`                      | `network` (containerized) or `loopback` (local dev) |
 | `PUID` / `PGID`         |          | `845`                          | UID/GID the Factorio image runs as |
-| `CLOUDFLARE_API_TOKEN`  |          | *(empty = DNS off)*            | Enables Cloudflare DNS + DDNS |
-| `CLOUDFLARE_ZONE_ID`    | if DNS   | —                              | Zone ID of your domain |
-| `BASE_DOMAIN`           | if DNS   | —                              | e.g. `mydomain.com` |
-| `HOST_RECORD_NAME`      | if DNS   | —                              | Shared SRV target + A record, e.g. `host.mydomain.com` |
-| `DDNS_INTERVAL_SECONDS` |          | `300`                          | Public-IP check interval |
-| `IP_CHECK_URL`          |          | `https://api.ipify.org`        | External "what's my IP" service |
+
+> **DNS / Cloudflare is not configured via env** — set the base domain, host record, Zone ID, API
+> token, DDNS interval and IP-check URL in the dashboard (**DNS / Cloudflare settings**). They're
+> stored in the database.
 
 ---
 

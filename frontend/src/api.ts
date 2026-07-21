@@ -1,6 +1,7 @@
 import type {
   ApplyResult,
   CatalogEntry,
+  DnsSettings,
   ModEntry,
   Modpack,
   ModpackDetail,
@@ -156,6 +157,12 @@ export const api = {
   getGlobalWhitelist: () => req<{ whitelist: string[] }>('GET', '/global/whitelist'),
   setGlobalWhitelist: (whitelist: string[]) =>
     req<{ whitelist: string[] }>('PUT', '/global/whitelist', { whitelist }),
+
+  // dns / cloudflare
+  getDns: () => req<{ dns: DnsSettings }>('GET', '/global/dns'),
+  setDns: (patch: Record<string, unknown>) => req<{ dns: DnsSettings }>('PUT', '/global/dns', patch),
+  testDns: () =>
+    req<{ ok: boolean; zoneName?: string; error?: string }>('POST', '/global/dns/test'),
 
   // rcon
   rcon: (id: string, command: string) =>

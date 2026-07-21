@@ -1,8 +1,8 @@
-import type { AppConfig } from '../config.js';
 import type { DB } from '../db/index.js';
 import { kvGet, kvSet } from '../db/index.js';
 import type { DnsRecordRow, ServerRow } from '../db/models.js';
 import { CloudflareClient, type SrvData } from '../lib/cloudflare.js';
+import { dnsEnabled, getDnsSettings, type DnsSettings } from './dnsSettings.js';
 
 const KV_HOST_A_RECORD_ID = 'host_a_record_id';
 const KV_LAST_PUBLIC_IP = 'last_public_ip';
@@ -13,50 +13,50 @@ const KV_LAST_PUBLIC_IP = 'last_public_ip';
  *  - one shared A record `host.<base>` that every SRV target points at, kept in
  *    sync with the current public IP by the DDNS job.
  *
- * When DNS is disabled (no Cloudflare token), every method is a safe no-op so the
- * app runs fine in a local/dev context where players connect by IP:port.
+ * All settings live in the DB (edited from the dashboard) and are read on each
+ * call, so config changes take effect without a restart. When DNS isn't fully
+ * configured, every method is a safe no-op so the app runs fine with players
+ * connecting by IP:port.
  */
 export class DnsService {
-  private readonly cf?: CloudflareClient;
+  constructor(private readonly db: DB) {}
 
-  constructor(
-    private readonly db: DB,
-    private readonly config: AppConfig,
-  ) {
-    if (config.dnsEnabled) {
-      if (!config.cloudflareZoneId || !config.baseDomain || !config.hostRecordName) {
-        throw new Error(
-          'DNS is enabled (CLOUDFLARE_API_TOKEN set) but CLOUDFLARE_ZONE_ID, BASE_DOMAIN and HOST_RECORD_NAME are required',
-        );
-      }
-      this.cf = new CloudflareClient(config.cloudflareToken, config.cloudflareZoneId);
-    }
+  /** Current settings snapshot. */
+  settings(): DnsSettings {
+    return getDnsSettings(this.db);
   }
 
   get enabled(): boolean {
-    return this.cf !== undefined;
+    return dnsEnabled(this.settings());
+  }
+
+  /** A Cloudflare client from current settings, or undefined when DNS is off. */
+  private cf(s: DnsSettings = this.settings()): CloudflareClient | undefined {
+    if (!dnsEnabled(s)) return undefined;
+    return new CloudflareClient(s.cloudflareToken, s.cloudflareZoneId);
   }
 
   /** The hostname players connect to for a given server. */
   connectHost(subdomain: string): string | undefined {
-    if (!this.config.baseDomain) return undefined;
-    return `${subdomain}.${this.config.baseDomain}`;
+    const { baseDomain } = this.settings();
+    if (!baseDomain) return undefined;
+    return `${subdomain}.${baseDomain}`;
   }
 
-  private srvData(subdomain: string, port: number): SrvData {
+  private srvData(s: DnsSettings, subdomain: string, port: number): SrvData {
     return {
       service: '_factorio',
       proto: '_udp',
-      name: `${subdomain}.${this.config.baseDomain}`,
+      name: `${subdomain}.${s.baseDomain}`,
       priority: 0,
       weight: 0,
       port,
-      target: this.config.hostRecordName,
+      target: s.hostRecordName,
     };
   }
 
-  private fullSrvName(subdomain: string): string {
-    return `_factorio._udp.${subdomain}.${this.config.baseDomain}`;
+  private fullSrvName(s: DnsSettings, subdomain: string): string {
+    return `_factorio._udp.${subdomain}.${s.baseDomain}`;
   }
 
   private srvRowFor(serverId: string): DnsRecordRow | undefined {
@@ -69,8 +69,10 @@ export class DnsService {
 
   /** Create the SRV record for a newly-created server. */
   async createServerSrv(server: ServerRow): Promise<void> {
-    if (!this.cf) return;
-    const record = await this.cf.createSrv(this.srvData(server.subdomain, server.game_port));
+    const s = this.settings();
+    const cf = this.cf(s);
+    if (!cf) return;
+    const record = await cf.createSrv(this.srvData(s, server.subdomain, server.game_port));
     this.db
       .prepare(
         `INSERT INTO dns_records (server_id, type, name, cloudflare_record_id, content)
@@ -78,9 +80,9 @@ export class DnsService {
       )
       .run(
         server.id,
-        this.fullSrvName(server.subdomain),
+        this.fullSrvName(s, server.subdomain),
         record.id,
-        `${this.config.hostRecordName}:${server.game_port}`,
+        `${s.hostRecordName}:${server.game_port}`,
       );
   }
 
@@ -89,18 +91,18 @@ export class DnsService {
    * If no record is tracked yet (e.g. created while DNS was off) it creates one.
    */
   async updateServerSrv(server: ServerRow): Promise<void> {
-    if (!this.cf) return;
+    const s = this.settings();
+    const cf = this.cf(s);
+    if (!cf) return;
     const existing = this.srvRowFor(server.id);
-    const data = this.srvData(server.subdomain, server.game_port);
+    const data = this.srvData(s, server.subdomain, server.game_port);
     if (existing?.cloudflare_record_id) {
-      await this.cf.updateSrv(existing.cloudflare_record_id, data);
+      await cf.updateSrv(existing.cloudflare_record_id, data);
       this.db
-        .prepare(
-          "UPDATE dns_records SET name = ?, content = ? WHERE id = ?",
-        )
+        .prepare('UPDATE dns_records SET name = ?, content = ? WHERE id = ?')
         .run(
-          this.fullSrvName(server.subdomain),
-          `${this.config.hostRecordName}:${server.game_port}`,
+          this.fullSrvName(s, server.subdomain),
+          `${s.hostRecordName}:${server.game_port}`,
           existing.id,
         );
     } else {
@@ -110,14 +112,15 @@ export class DnsService {
 
   /** Remove a server's SRV record from Cloudflare and our bookkeeping. */
   async deleteServerSrv(serverId: string): Promise<void> {
+    const cf = this.cf();
     const rows = this.db
       .prepare<DnsRecordRow>("SELECT * FROM dns_records WHERE server_id = ? AND type = 'SRV'")
       .all(serverId);
     for (const row of rows) {
-      if (this.cf && row.cloudflare_record_id) {
+      if (cf && row.cloudflare_record_id) {
         // Best-effort: if the record was already removed at Cloudflare, ignore.
         try {
-          await this.cf.deleteRecord(row.cloudflare_record_id);
+          await cf.deleteRecord(row.cloudflare_record_id);
         } catch (err) {
           console.warn(`[dns] failed to delete SRV ${row.name}: ${(err as Error).message}`);
         }
@@ -131,13 +134,15 @@ export class DnsService {
    * it if changed, no-ops if already correct. Returns whether a change was made.
    */
   async ensureHostARecord(ip: string): Promise<boolean> {
-    if (!this.cf) return false;
+    const s = this.settings();
+    const cf = this.cf(s);
+    if (!cf) return false;
     const lastIp = kvGet(this.db, KV_LAST_PUBLIC_IP);
     let recordId = kvGet(this.db, KV_HOST_A_RECORD_ID);
 
     // Reconcile our cached record id against Cloudflare if we don't have one.
     if (!recordId) {
-      const found = await this.cf.findRecords('A', this.config.hostRecordName);
+      const found = await cf.findRecords('A', s.hostRecordName);
       if (found.length > 0) {
         recordId = found[0].id;
         kvSet(this.db, KV_HOST_A_RECORD_ID, recordId);
@@ -151,12 +156,26 @@ export class DnsService {
     }
 
     if (recordId) {
-      await this.cf.updateA(recordId, this.config.hostRecordName, ip);
+      await cf.updateA(recordId, s.hostRecordName, ip);
     } else {
-      const created = await this.cf.createA(this.config.hostRecordName, ip);
+      const created = await cf.createA(s.hostRecordName, ip);
       kvSet(this.db, KV_HOST_A_RECORD_ID, created.id);
     }
     kvSet(this.db, KV_LAST_PUBLIC_IP, ip);
     return true;
+  }
+
+  /** Verify the configured token can access the configured zone (for the UI test). */
+  async testConnection(): Promise<{ ok: boolean; zoneName?: string; error?: string }> {
+    const s = this.settings();
+    if (!s.cloudflareToken || !s.cloudflareZoneId) {
+      return { ok: false, error: 'API token and Zone ID are required' };
+    }
+    try {
+      const zone = await new CloudflareClient(s.cloudflareToken, s.cloudflareZoneId).getZone();
+      return { ok: true, zoneName: zone.name };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   }
 }

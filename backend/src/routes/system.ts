@@ -22,8 +22,8 @@ export function systemRouter(ctx: AppContext): Router {
         docker: { ok: dockerOk, error: dockerError },
         dns: {
           enabled: ctx.dns.enabled,
-          baseDomain: ctx.config.baseDomain || null,
-          hostRecord: ctx.config.hostRecordName || null,
+          baseDomain: ctx.dns.settings().baseDomain || null,
+          hostRecord: ctx.dns.settings().hostRecordName || null,
         },
         ddns: ctx.ddns.status(),
         ports: {

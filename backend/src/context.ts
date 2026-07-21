@@ -31,12 +31,12 @@ export function buildContext(config: AppConfig): AppContext {
   const repo = new ServersRepo(db);
   const allocator = new PortAllocator(db, config.gamePortRange, config.rconPortRange);
   const docker = new DockerService(config);
-  const dns = new DnsService(db, config);
+  const dns = new DnsService(db);
   const rcon = new RconService(config);
   const mods = new ModService();
   const modpacksRepo = new ModpacksRepo(db);
   const modpacks = new ModpackService(modpacksRepo, repo, mods);
   const manager = new ServerManager(db, repo, allocator, docker, dns, rcon, config);
-  const ddns = new DdnsJob(dns, config);
+  const ddns = new DdnsJob(dns);
   return { config, db, repo, allocator, docker, dns, rcon, mods, modpacks, manager, ddns };
 }

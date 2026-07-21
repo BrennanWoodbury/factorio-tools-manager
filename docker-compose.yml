@@ -38,14 +38,7 @@ services:
       RCON_MODE: network
       PUID: ${PUID:-845}
       PGID: ${PGID:-845}
-
-      # --- DNS / DDNS (Cloudflare). Leave CLOUDFLARE_API_TOKEN empty to disable. ---
-      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
-      CLOUDFLARE_ZONE_ID: ${CLOUDFLARE_ZONE_ID:-}
-      BASE_DOMAIN: ${BASE_DOMAIN:-}
-      HOST_RECORD_NAME: ${HOST_RECORD_NAME:-}
-      DDNS_INTERVAL_SECONDS: ${DDNS_INTERVAL_SECONDS:-300}
-      IP_CHECK_URL: ${IP_CHECK_URL:-https://api.ipify.org}
+      # DNS / DDNS (Cloudflare) is configured in the dashboard, not via env.
     volumes:
       # Manage sibling containers via the host Docker daemon.
       - /var/run/docker.sock:/var/run/docker.sock

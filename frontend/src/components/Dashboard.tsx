@@ -4,6 +4,7 @@ import type { Server, ServerStatus, SystemStatus } from '../types';
 import { CreateServerForm } from './CreateServerForm';
 import { StatusBadge } from './StatusBadge';
 import { WhitelistPanel } from './WhitelistPanel';
+import { DnsSettingsPanel } from './DnsSettingsPanel';
 
 export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
   const [servers, setServers] = useState<Server[]>([]);
@@ -77,6 +78,13 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
       })}
 
       <details style={{ marginTop: 18 }}>
+        <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
+          DNS / Cloudflare settings
+        </summary>
+        <DnsSettingsPanel />
+      </details>
+
+      <details style={{ marginTop: 8 }}>
         <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
           Global whitelist (applies to every server)
         </summary>

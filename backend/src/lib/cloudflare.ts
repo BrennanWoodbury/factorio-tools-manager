@@ -59,6 +59,14 @@ export class CloudflareClient {
     return json.result;
   }
 
+  /** Fetch the configured zone (used to verify token + zone access). */
+  async getZone(): Promise<{ id: string; name: string; status: string }> {
+    return this.call<{ id: string; name: string; status: string }>(
+      'GET',
+      `/zones/${this.zoneId}`,
+    );
+  }
+
   /** Find records of a given type and exact (full) name. */
   async findRecords(type: string, name: string): Promise<CloudflareRecord[]> {
     const params = new URLSearchParams({ type, name });
