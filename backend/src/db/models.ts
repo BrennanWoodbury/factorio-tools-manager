@@ -21,6 +21,8 @@ export interface ServerRow {
   settings_json: string | null;
   /** Modpack last applied to this server (for display / re-apply). Migration v2. */
   applied_modpack_id: string | null;
+  /** Per-server player whitelist as a JSON string array. Migration v4. */
+  whitelist_json: string | null;
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */

@@ -11,6 +11,7 @@ import { authRouter } from './routes/auth.js';
 import { serversRouter } from './routes/servers.js';
 import { modsRouter } from './routes/mods.js';
 import { modpacksRouter } from './routes/modpacks.js';
+import { globalRouter } from './routes/global.js';
 import { systemRouter } from './routes/system.js';
 import { requireAuth } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -56,6 +57,7 @@ async function main() {
   app.use('/api/servers', serversRouter(ctx));
   app.use('/api/mods', modsRouter(ctx));
   app.use('/api/modpacks', modpacksRouter(ctx));
+  app.use('/api/global', globalRouter(ctx));
   app.use('/api/system', systemRouter(ctx));
 
   // Serve the built SPA if present (single-container deployment).

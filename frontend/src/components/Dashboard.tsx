@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { Server, ServerStatus, SystemStatus } from '../types';
 import { CreateServerForm } from './CreateServerForm';
 import { StatusBadge } from './StatusBadge';
+import { WhitelistPanel } from './WhitelistPanel';
 
 export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
   const [servers, setServers] = useState<Server[]>([]);
@@ -74,6 +75,18 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
           </div>
         );
       })}
+
+      <details style={{ marginTop: 18 }}>
+        <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
+          Global whitelist (applies to every server)
+        </summary>
+        <WhitelistPanel
+          title="Global whitelist"
+          description="These Factorio usernames may join every server, on top of each server's own whitelist. Leave empty to disable. Applies to each server on its next start/restart."
+          load={async () => (await api.getGlobalWhitelist()).whitelist}
+          save={async (names) => (await api.setGlobalWhitelist(names)).whitelist}
+        />
+      </details>
 
       {showCreate && (
         <CreateServerForm

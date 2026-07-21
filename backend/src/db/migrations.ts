@@ -43,6 +43,13 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 4,
+    // Per-server player whitelist (JSON array of Factorio usernames). The global
+    // whitelist lives in the kv table; the effective whitelist written to
+    // server-whitelist.json on start is the union of the two.
+    up: (db) => db.exec('ALTER TABLE servers ADD COLUMN whitelist_json TEXT'),
+  },
 ];
 
 export function runMigrations(db: DB): void {

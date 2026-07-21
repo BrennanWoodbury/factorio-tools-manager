@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { Server } from '../types';
 import { run } from '../ui';
 import { AdvancedSettings } from './AdvancedSettings';
+import { WhitelistPanel } from './WhitelistPanel';
 
 export function SettingsPanel({
   server,
@@ -78,6 +79,13 @@ export function SettingsPanel({
       </div>
 
       <AdvancedSettings serverId={server.id} />
+
+      <WhitelistPanel
+        title="Player whitelist"
+        description="Only these Factorio usernames may join this server (in addition to the global whitelist). Applies on next start/restart."
+        load={async () => (await api.getWhitelist(server.id)).whitelist}
+        save={async (names) => (await api.setWhitelist(server.id, names)).whitelist}
+      />
 
       <div className="panel" style={{ borderColor: 'var(--red)' }}>
         <h2 style={{ color: 'var(--red)' }}>Danger zone</h2>

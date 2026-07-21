@@ -114,6 +114,28 @@ export class ServerFilesService {
     );
   }
 
+  // ---- Whitelist ----
+
+  whitelistPath(serverId: string): string {
+    return path.join(this.configDir(serverId), 'server-whitelist.json');
+  }
+
+  /**
+   * Write the effective player whitelist to config/server-whitelist.json. The
+   * factoriotools image enforces the whitelist whenever this file is present, so
+   * we must NOT write it when the list is empty (that would block everyone) —
+   * instead we remove any stale file, leaving the server open.
+   */
+  writeWhitelist(serverId: string, names: string[]): void {
+    const path_ = this.whitelistPath(serverId);
+    if (names.length === 0) {
+      if (fs.existsSync(path_)) fs.rmSync(path_);
+      return;
+    }
+    this.ensureDirs(serverId);
+    fs.writeFileSync(path_, JSON.stringify(names, null, 2));
+  }
+
   // ---- Saves ----
 
   listSaves(serverId: string): { name: string; sizeBytes: number; modifiedAt: string }[] {

@@ -153,6 +153,23 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  // ---- Per-server player whitelist ----
+
+  r.get(
+    '/:id/whitelist',
+    asyncHandler(async (req, res) => {
+      res.json({ whitelist: manager.getServerWhitelist(req.params.id) });
+    }),
+  );
+
+  r.put(
+    '/:id/whitelist',
+    asyncHandler(async (req, res) => {
+      const body = parse(z.object({ whitelist: z.array(z.string().max(100)) }), req.body);
+      res.json({ whitelist: manager.setServerWhitelist(req.params.id, body.whitelist) });
+    }),
+  );
+
   // ---- Saves ----
 
   r.get(

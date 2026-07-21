@@ -128,6 +128,9 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   container), pick which to load next, download, delete.
 - **Server settings:** edit the full `server-settings.json` (visibility, game password, autosave,
   `allow_commands`, AFK kick, pause rules, …) via a structured form plus a raw-JSON escape hatch.
+- **Whitelist:** a per-server player whitelist plus a **global** whitelist that applies to every
+  server. The effective list (global ∪ per-server) is written to `server-whitelist.json` on start;
+  an empty list leaves the server open. Applies on next start/restart.
 - **Mods:** search the Factorio Mod Portal by keyword and add mods with one click; upload a mod
   `.zip` manually; enable/disable; update all to latest; delete all; export a shareable manifest.
   With mod-portal credentials, enabled mods are downloaded on save. Changes apply on next start.
@@ -228,6 +231,7 @@ for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id)
 | GET | `/servers/:id/status` | live state + players |
 | GET | `/servers/:id/logs` | container logs |
 | GET/PUT | `/servers/:id/settings` | full server-settings.json body |
+| GET/PUT | `/servers/:id/whitelist` · `/global/whitelist` | per-server / global player whitelist |
 | GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / create / select / download / delete |
 | GET/PUT | `/servers/:id/mods` | get / apply mod list |
 | POST | `/servers/:id/mods/{upload,update,deleteAll}` · GET `/mods/export` | mod ops |
