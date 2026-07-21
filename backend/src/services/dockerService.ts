@@ -61,18 +61,33 @@ export class DockerService {
     return `${repo}:${tag}`;
   }
 
-  /** Ensure an image is present locally, pulling it if missing. */
+  /**
+   * Ensure an image is available, pulling on EVERY call so moving tags (stable,
+   * latest) pick up updates on each container (re)create. If the pull fails but we
+   * already have a local copy (e.g. registry unreachable / offline), we proceed
+   * with the local image rather than blocking the start.
+   */
   async ensureImage(image: string): Promise<void> {
     try {
-      await this.docker.getImage(image).inspect();
-      return; // already present
-    } catch (err) {
-      if ((err as { statusCode?: number }).statusCode !== 404) {
-        throw new DockerError(`inspect image ${image} failed: ${(err as Error).message}`);
+      console.log(`[docker] pulling ${image} (checking for updates) …`);
+      await this.pullImage(image);
+      console.log(`[docker] ${image} up to date`);
+    } catch (pullErr) {
+      try {
+        await this.docker.getImage(image).inspect();
+        console.warn(
+          `[docker] pull ${image} failed (${(pullErr as Error).message}); using local copy`,
+        );
+      } catch {
+        throw pullErr instanceof DockerError
+          ? pullErr
+          : new DockerError(`image ${image} unavailable: ${(pullErr as Error).message}`);
       }
     }
-    console.log(`[docker] pulling ${image} …`);
-    await new Promise<void>((resolve, reject) => {
+  }
+
+  private pullImage(image: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
       this.docker.pull(image, (err: Error | null, stream: NodeJS.ReadableStream) => {
         if (err || !stream) {
           reject(new DockerError(`pull ${image} failed: ${err?.message ?? 'no stream'}`));
@@ -83,7 +98,6 @@ export class DockerService {
         );
       });
     });
-    console.log(`[docker] pulled ${image}`);
   }
 
   async ping(): Promise<void> {

@@ -4,6 +4,7 @@ import type { Server } from '../types';
 import { run } from '../ui';
 import { AdvancedSettings } from './AdvancedSettings';
 import { WhitelistPanel } from './WhitelistPanel';
+import { FactorioTagSelect } from './FactorioTagSelect';
 
 export function SettingsPanel({
   server,
@@ -64,17 +65,10 @@ export function SettingsPanel({
         <label>Description</label>
         <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
 
-        <label>Factorio version (image tag — blank = server default)</label>
-        <input
-          className="mono"
-          value={factorioTag}
-          onChange={(e) => setFactorioTag(e.target.value)}
-          placeholder="stable"
-        />
+        <FactorioTagSelect value={factorioTag} onChange={setFactorioTag} />
         <div className="small muted" style={{ marginTop: 4 }}>
-          Runs <span className="mono">{server.factorioImage ?? 'the default image'}</span>. Change
-          the tag (e.g. <span className="mono">latest</span>, <span className="mono">2.0.55</span>);
-          the new image is pulled on next start.
+          Currently runs <span className="mono">{server.factorioImage ?? 'the default image'}</span>.
+          The image is pulled (checking for updates) on every start/restart.
         </div>
 
         <details style={{ marginTop: 12 }}>

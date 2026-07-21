@@ -131,9 +131,10 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Whitelist:** a per-server player whitelist plus a **global** whitelist that applies to every
   server. The effective list (global ∪ per-server) is written to `server-whitelist.json` on start;
   an empty list leaves the server open. Applies on next start/restart.
-- **Per-server Factorio version:** each server can pin its own image tag (e.g. one on `stable`,
-  another on `latest` or `2.0.55`). Blank uses the global `FACTORIO_IMAGE`. The tag overrides just
-  the tag of the configured base repo, and the image is auto-pulled on start if not present.
+- **Per-server Factorio version:** each server picks its version from a dropdown — **stable**,
+  **latest (experimental)**, or **custom** (any image tag, e.g. `2.0.55`) — overriding just the tag
+  of the configured base repo (`FACTORIO_IMAGE`). The image is **pulled on every start/restart** to
+  pick up updates to moving tags; if the registry is unreachable it falls back to the local copy.
 - **Mods:** search the Factorio Mod Portal by keyword and add mods with one click; upload a mod
   `.zip` manually; enable/disable; update all to latest; delete all; export a shareable manifest.
   With mod-portal credentials, enabled mods are downloaded on save. Changes apply on next start.
