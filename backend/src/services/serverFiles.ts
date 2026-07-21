@@ -116,6 +116,23 @@ export class ServerFilesService {
     );
   }
 
+  // ---- RCON password ----
+
+  rconPasswordPath(serverId: string): string {
+    return path.join(this.configDir(serverId), 'rconpw');
+  }
+
+  /**
+   * Write the RCON password to config/rconpw. The factoriotools image reads its
+   * RCON password from this file (auto-generating one only if absent) and ignores
+   * the RCON_PASSWORD env var, so we must write it ourselves for the manager's
+   * stored password to match what the server actually uses.
+   */
+  writeRconPassword(serverId: string, password: string): void {
+    this.ensureDirs(serverId);
+    fs.writeFileSync(this.rconPasswordPath(serverId), password);
+  }
+
   // ---- Whitelist ----
 
   whitelistPath(serverId: string): string {

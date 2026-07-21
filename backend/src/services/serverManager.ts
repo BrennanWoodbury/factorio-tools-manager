@@ -266,6 +266,9 @@ export class ServerManager {
     // Recreate the container each start so it always reflects current config
     // (env vars, ports). Data lives in the bind mount, so this is cheap.
     serverFiles.writeServerSettings(row);
+    // The image reads its RCON password from config/rconpw (ignoring the env var),
+    // so write our stored password there so the manager can authenticate.
+    serverFiles.writeRconPassword(id, row.rcon_password);
     // Effective whitelist = global ∪ per-server. Written (or cleared) each start.
     serverFiles.writeWhitelist(id, this.effectiveWhitelist(id));
     await this.docker.remove(id);
