@@ -29,10 +29,13 @@ and connects to `host.mydomain.com:<gamePort>` over UDP. So:
 2. **One shared A record** `host.mydomain.com` points at your current public IP. Because your
    home IP is dynamic, a background **DDNS job** keeps that one A record in sync. Every server's
    SRV points at it, so a single update follows the WAN IP for all servers at once.
-3. **Ports are 1:1, never translated.** You forward a contiguous UDP range **once, by hand** on
-   your router to this host. The app only ever allocates game ports from inside that range, and
-   the port it advertises in the SRV record is exactly the host port the container publishes.
-   `external port == host port == SRV port`.
+3. **Ports are 1:1, never translated — all the way to the container.** You forward a contiguous
+   UDP range **once, by hand** on your router to this host. The app only ever allocates game ports
+   from inside that range, advertises exactly that port in the SRV record, publishes it on the same
+   host port, and binds Factorio *inside* the container to that same port (via the image's `PORT`
+   → `--port`). So `external port == host port == container port == SRV port`, with no rewriting at
+   any hop. That end-to-end match is what keeps Factorio's public server listing / NAT
+   punch-through pointed at the port players can actually reach.
 
 **RCON** (server admin protocol) is treated completely separately: allocated from its own range,
 published only on host loopback (`127.0.0.1`) and reached by the backend over the internal Docker

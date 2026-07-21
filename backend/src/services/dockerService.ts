@@ -4,8 +4,17 @@ import type { AppConfig } from '../config.js';
 import type { ServerRow } from '../db/models.js';
 import { DockerError } from '../lib/errors.js';
 
-/** Internal (container-side) Factorio ports — fixed by the image. */
-export const GAME_PORT_INTERNAL = 34197;
+/**
+ * Internal (container-side) RCON port. RCON is never forwarded externally, so its
+ * container port is fixed and every container can share it (they're in separate
+ * network namespaces); the manager reaches each one by its unique network alias.
+ *
+ * The GAME port, by contrast, is bound inside the container to the server's own
+ * allocated port (via the image's PORT env → `--port`) and published 1:1 to the
+ * host, so external == host == container == the SRV-advertised port with no
+ * translation anywhere. That end-to-end match is required for Factorio's public
+ * server listing / NAT punch-through to advertise the reachable port.
+ */
 export const RCON_PORT_INTERNAL = 27015;
 
 export const MANAGED_LABEL = 'factorio-manager.managed';
@@ -22,9 +31,11 @@ export interface ContainerStatus {
  * Wraps dockerode to create/start/stop/remove the per-server Factorio containers.
  *
  * Port mapping (the crux of the networking model):
- *   - game: <allocatedGamePort>:34197/udp bound on 0.0.0.0 so it's reachable from
- *     the internet via the router's manual 1:1 forward. Host port == advertised
- *     SRV port.
+ *   - game: <allocatedGamePort>:<allocatedGamePort>/udp — Factorio inside the
+ *     container binds the same allocated port (PORT env → `--port`), and it's
+ *     published 1:1 on 0.0.0.0. So external == host == container == advertised SRV
+ *     port with no translation, which keeps Factorio's public listing / NAT
+ *     punch-through pointing at the actually-reachable port.
  *   - rcon: 127.0.0.1:<allocatedRconPort>:27015/tcp — published only on host
  *     loopback, never externally, never in DNS.
  * Additionally every Factorio container joins a shared user-defined network so the
@@ -150,6 +161,11 @@ export class DockerService {
       SAVE_NAME: server.save_name,
       GENERATE_NEW_SAVE: server.generate_new_save === 1 ? 'true' : 'false',
       LOAD_LATEST_SAVE: 'false',
+      // Bind Factorio inside the container to the server's own allocated game port
+      // so it matches the host/external/SRV port 1:1 (no translation). RCON stays on
+      // the fixed internal port (loopback/Docker-network only, never forwarded).
+      PORT: String(server.game_port),
+      RCON_PORT: String(RCON_PORT_INTERNAL),
       RCON_PASSWORD: server.rcon_password,
       // We manage mods ourselves via the Mod Portal API, so keep the image from
       // trying to update them on boot (which would also fail without creds).
@@ -180,7 +196,7 @@ export class DockerService {
         Image: image,
         Env: this.envFor(server),
         ExposedPorts: {
-          [`${GAME_PORT_INTERNAL}/udp`]: {},
+          [`${gamePort}/udp`]: {},
           [`${RCON_PORT_INTERNAL}/tcp`]: {},
         },
         Labels: {
@@ -190,7 +206,8 @@ export class DockerService {
         HostConfig: {
           Binds: [`${hostDataDir}:/factorio`],
           PortBindings: {
-            [`${GAME_PORT_INTERNAL}/udp`]: [{ HostIp: '0.0.0.0', HostPort: gamePort }],
+            // 1:1 — container game port == host game port == external/SRV port.
+            [`${gamePort}/udp`]: [{ HostIp: '0.0.0.0', HostPort: gamePort }],
             // RCON published on host loopback only.
             [`${RCON_PORT_INTERNAL}/tcp`]: [{ HostIp: '127.0.0.1', HostPort: rconPort }],
           },
