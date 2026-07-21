@@ -284,31 +284,25 @@ export class ServerManager {
 
   // ---- Map generation (new-save settings) ----
 
-  /** Effective map-gen-settings + map-settings for a server (defaults filled). */
-  getMapGen(id: string): { mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> } {
-    const row = this.get(id);
-    return {
-      mapGen: serverFiles.getMapGenSettings(row),
-      mapSettings: serverFiles.getMapSettings(row),
-    };
+  /** Effective map-gen-settings for a server (defaults filled). */
+  getMapGen(id: string): { mapGen: Record<string, unknown> } {
+    return { mapGen: serverFiles.getMapGenSettings(this.get(id)) };
   }
 
   /**
-   * Store new-map generation settings. These only affect the NEXT map generated
-   * (a fresh start with no save, or an explicit "New save"), so no running game is
-   * restarted. Either part may be omitted to leave it unchanged.
+   * Store new-map generation settings (map-gen-settings.json only — resources,
+   * water, terrain, cliffs, starting area, peaceful mode, seed). These only affect
+   * the NEXT map generated (a fresh start with no save, or an explicit "New save"),
+   * so no running game is restarted. (map-settings.json — pollution/evolution/
+   * expansion — is left to the image, which ships a version-matched file; Factorio
+   * rejects a hand-written one that doesn't match the exact binary version.)
    */
   async updateMapGen(
     id: string,
-    input: { mapGen?: Record<string, unknown>; mapSettings?: Record<string, unknown> },
-  ): Promise<{ mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> }> {
+    input: { mapGen: Record<string, unknown> },
+  ): Promise<{ mapGen: Record<string, unknown> }> {
     this.get(id); // 404 if unknown
-    if (input.mapGen !== undefined) {
-      this.repo.setMapGenSettingsJson(id, JSON.stringify(input.mapGen));
-    }
-    if (input.mapSettings !== undefined) {
-      this.repo.setMapSettingsJson(id, JSON.stringify(input.mapSettings));
-    }
+    this.repo.setMapGenSettingsJson(id, JSON.stringify(input.mapGen));
     return this.getMapGen(id);
   }
 
@@ -423,9 +417,10 @@ export class ServerManager {
     // Recreate the container each start so it always reflects current config
     // (env vars, ports). Data lives in the bind mount, so this is cheap.
     serverFiles.writeServerSettings(row);
-    // New-map generation settings: written to config/ so the image's `--create`
-    // (GENERATE_NEW_SAVE=true, or first start with no saves) honours them.
-    serverFiles.writeMapGenAndSettings(row);
+    // Custom map-gen settings (if any) written to config/ so the image's `--create`
+    // (GENERATE_NEW_SAVE=true, or first start with no saves) honours them; also heals
+    // any stale incomplete map-settings.json left by an earlier build.
+    serverFiles.writeMapGenSettings(row);
     // The image reads its RCON password from config/rconpw (ignoring the env var),
     // so write our stored password there so the manager can authenticate.
     serverFiles.writeRconPassword(id, row.rcon_password);
@@ -457,17 +452,16 @@ export class ServerManager {
     }
     serverFiles.ensureDirs(id);
     // The one-shot overrides the entrypoint and invokes the binary directly, so the
-    // image's own map-gen handling doesn't run — write the settings and pass them
-    // explicitly so an on-demand new save honours the configured map generation.
-    serverFiles.writeMapGenAndSettings(row);
-    const { exitCode, logs } = await this.docker.runOneShot(row, serverFiles.hostDir(id), [
-      '--create',
-      `/factorio/saves/${name}.zip`,
-      '--map-gen-settings',
-      '/factorio/config/map-gen-settings.json',
-      '--map-settings',
-      '/factorio/config/map-settings.json',
-    ]);
+    // image's own map-gen handling (incl. copying example configs) doesn't run. Write
+    // our custom map-gen file (if the server has one) and pass it explicitly. We don't
+    // pass --map-settings: omitting it uses Factorio's built-in, version-correct
+    // defaults (a hand-written file risks the strict-schema crash).
+    serverFiles.writeMapGenSettings(row);
+    const args = ['--create', `/factorio/saves/${name}.zip`];
+    if (row.map_gen_settings_json) {
+      args.push('--map-gen-settings', '/factorio/config/map-gen-settings.json');
+    }
+    const { exitCode, logs } = await this.docker.runOneShot(row, serverFiles.hostDir(id), args);
     if (exitCode !== 0 || !serverFiles.saveExists(id, name)) {
       throw new DockerError(`save generation failed (exit ${exitCode}): ${logs.slice(-500)}`);
     }

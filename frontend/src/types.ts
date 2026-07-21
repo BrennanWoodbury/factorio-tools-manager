@@ -23,11 +23,10 @@ export interface Server {
   connectHost?: string;
 }
 
-/** Raw map generation settings objects (mirror Factorio's *.json). */
+/** Raw map-gen-settings.json object (mirrors Factorio's schema). */
 export type MapGenSettings = Record<string, unknown>;
 export interface MapGen {
   mapGen: MapGenSettings;
-  mapSettings: MapGenSettings;
 }
 
 export interface BackupInfo {

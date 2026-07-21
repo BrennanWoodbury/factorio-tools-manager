@@ -137,10 +137,11 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   forces a fresh save via RCON first. List, download, restore (into a save; server stopped), delete.
 - **Map generation:** a **Map gen** tab with the in-game map-generation sliders — resource
   frequency/size/richness (iron, copper, coal, stone, uranium, oil), water, trees, enemy bases,
-  cliffs, starting-area size, peaceful mode, map seed, plus enemy behaviour toggles (pollution,
-  evolution, expansion). Written to `config/map-gen-settings.json` + `config/map-settings.json` and
-  applied to the **next new map generated** (first start with no save, or a new save from the Saves
-  tab); doesn't alter an existing world.
+  cliffs, starting-area size, peaceful mode and map seed. Written to `config/map-gen-settings.json`
+  only when you customize it, and applied to the **next new map generated** (first start with no
+  save, or a new save from the Saves tab); doesn't alter an existing world. `map-settings.json`
+  (pollution/evolution/expansion) is left to the image's version-matched example — Factorio
+  validates it strictly against the exact binary version, so a hand-written one isn't safe.
 - **Server settings:** edit the full `server-settings.json` (visibility, game password, autosave,
   `allow_commands`, AFK kick, pause rules, …) via a structured form plus a raw-JSON escape hatch.
 - **Auto-restart on change:** an optional per-server toggle — when on, saving a change that only

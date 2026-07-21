@@ -100,7 +100,7 @@ export const api = {
 
   // map generation (new-save settings)
   getMapGen: (id: string) => req<MapGen>('GET', `/servers/${id}/mapgen`),
-  setMapGen: (id: string, patch: { mapGen?: Record<string, unknown>; mapSettings?: Record<string, unknown> }) =>
+  setMapGen: (id: string, patch: { mapGen: Record<string, unknown> }) =>
     req<MapGen>('PUT', `/servers/${id}/mapgen`, patch),
 
   // backups

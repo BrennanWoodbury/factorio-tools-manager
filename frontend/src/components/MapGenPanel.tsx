@@ -86,14 +86,12 @@ const TERRAIN: { key: string; label: string }[] = [
 
 export function MapGenPanel({ server }: { server: Server }) {
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
-  const [mapSettings, setMapSettings] = useState<MapGenSettings | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const r = await api.getMapGen(server.id);
       setMapGen(r.mapGen);
-      setMapSettings(r.mapSettings);
     } catch (err) {
       toastError((err as Error).message);
     }
@@ -103,7 +101,7 @@ export function MapGenPanel({ server }: { server: Server }) {
     void load();
   }, [load]);
 
-  if (!mapGen || !mapSettings) return <div className="muted">Loading…</div>;
+  if (!mapGen) return <div className="muted">Loading…</div>;
 
   // convenience getters/setters bound to the two raw objects
   const g = (path: (string | number)[], dflt = 1): number => {
@@ -127,14 +125,10 @@ export function MapGenPanel({ server }: { server: Server }) {
   const seedRaw = getPath(mapGen, ['seed']);
   const seed = typeof seedRaw === 'number' ? String(seedRaw) : '';
 
-  const enemyToggle = (path: (string | number)[]): boolean => getPath(mapSettings, path) !== false;
-  const setEnemyToggle = (path: (string | number)[], v: boolean) =>
-    setMapSettings((m) => setPath(m, path, v));
-
   const save = async () => {
     setBusy(true);
     const ok = await run(
-      () => api.setMapGen(server.id, { mapGen: mapGen ?? {}, mapSettings: mapSettings ?? {} }),
+      () => api.setMapGen(server.id, { mapGen: mapGen ?? {} }),
       'Map generation settings saved',
     );
     setBusy(false);
@@ -245,37 +239,6 @@ export function MapGenPanel({ server }: { server: Server }) {
             setMapGen((m) => setPath(m, ['seed'], val === '' ? null : Number(val)));
           }}
         />
-      </div>
-
-      <div className="panel">
-        <h3 style={{ marginTop: 0, marginBottom: 12 }}>Enemy behaviour</h3>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <input
-            type="checkbox"
-            style={{ width: 'auto' }}
-            checked={enemyToggle(['pollution', 'enabled'])}
-            onChange={(e) => setEnemyToggle(['pollution', 'enabled'], e.target.checked)}
-          />
-          Pollution enabled
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <input
-            type="checkbox"
-            style={{ width: 'auto' }}
-            checked={enemyToggle(['enemy_evolution', 'enabled'])}
-            onChange={(e) => setEnemyToggle(['enemy_evolution', 'enabled'], e.target.checked)}
-          />
-          Enemy evolution enabled
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="checkbox"
-            style={{ width: 'auto' }}
-            checked={enemyToggle(['enemy_expansion', 'enabled'])}
-            onChange={(e) => setEnemyToggle(['enemy_expansion', 'enabled'], e.target.checked)}
-          />
-          Enemy expansion enabled (bases spread over time)
-        </label>
       </div>
     </>
   );

@@ -158,49 +158,9 @@ export class ServerFilesService {
     };
   }
 
-  /** Default map-settings.json — mirrors the image's map-settings.example.json. */
-  defaultMapSettings(): Record<string, unknown> {
-    return {
-      difficulty_settings: { technology_price_multiplier: 1, spoil_time_modifier: 1 },
-      pollution: {
-        enabled: true,
-        diffusion_ratio: 0.02,
-        min_to_diffuse: 15,
-        ageing: 1,
-        expected_max_per_chunk: 150,
-        min_to_show_per_chunk: 50,
-        min_pollution_to_damage_trees: 60,
-        pollution_with_max_forest_damage: 150,
-        pollution_per_tree_damage: 50,
-        pollution_restored_per_tree_damage: 10,
-        max_pollution_to_restore_trees: 20,
-        enemy_attack_pollution_consumption_modifier: 1,
-      },
-      enemy_evolution: {
-        enabled: true,
-        time_factor: 0.000004,
-        destroy_factor: 0.002,
-        pollution_factor: 0.0000009,
-      },
-      enemy_expansion: {
-        enabled: true,
-        max_expansion_distance: 7,
-        settler_group_min_size: 5,
-        settler_group_max_size: 20,
-        min_expansion_cooldown: 14400,
-        max_expansion_cooldown: 216000,
-      },
-    };
-  }
-
   /** Stored map-gen-settings for a server, deep-merged onto the defaults. */
   getMapGenSettings(server: ServerRow): Record<string, unknown> {
     return deepMerge(this.defaultMapGenSettings(), parseJsonObject(server.map_gen_settings_json));
-  }
-
-  /** Stored map-settings for a server, deep-merged onto the defaults. */
-  getMapSettings(server: ServerRow): Record<string, unknown> {
-    return deepMerge(this.defaultMapSettings(), parseJsonObject(server.map_settings_json));
   }
 
   mapGenSettingsPath(serverId: string): string {
@@ -212,20 +172,42 @@ export class ServerFilesService {
   }
 
   /**
-   * Write config/map-gen-settings.json + config/map-settings.json from the server
-   * row. The factoriotools image passes these to `--create` when generating a new
-   * save, so they must be on disk before generation. Written before each start and
-   * before an explicit `createSave`.
+   * map-settings.json (pollution/evolution/expansion/etc.) is NOT managed by this
+   * tool: Factorio validates it strictly against the exact binary version, requiring
+   * keys that aren't even in an older image's example, so a hand-written file
+   * crash-loops new-save generation. We leave it to the image, which drops a
+   * version-matched example. This removes any incomplete leftover — one missing the
+   * `path_finder` section that a complete file always has (e.g. one an earlier build
+   * of this tool wrote) — so the image recreates a valid one on the next start.
    */
-  writeMapGenAndSettings(server: ServerRow): void {
+  healMapSettings(serverId: string): void {
+    const p = this.mapSettingsPath(serverId);
+    if (!fs.existsSync(p)) return;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(p, 'utf8')) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && !('path_finder' in parsed)) {
+        fs.rmSync(p);
+        console.warn(`[serverFiles] removed incomplete map-settings.json for ${serverId}; image will recreate it`);
+      }
+    } catch {
+      fs.rmSync(p); // corrupt — let the image recopy its example
+    }
+  }
+
+  /**
+   * Write config/map-gen-settings.json — but ONLY when the server has customized map
+   * generation. When it hasn't, we leave the file absent so the image uses its own
+   * version-matched example (no schema-drift risk). The image passes the file to
+   * `--create`, so it must be on disk before generation. Also heals any stale
+   * incomplete map-settings.json. Called before each start and before createSave.
+   */
+  writeMapGenSettings(server: ServerRow): void {
+    this.healMapSettings(server.id);
+    if (!server.map_gen_settings_json) return; // uncustomized → use the image's example
     this.ensureDirs(server.id);
     fs.writeFileSync(
       this.mapGenSettingsPath(server.id),
       JSON.stringify(this.getMapGenSettings(server), null, 2),
-    );
-    fs.writeFileSync(
-      this.mapSettingsPath(server.id),
-      JSON.stringify(this.getMapSettings(server), null, 2),
     );
   }
 

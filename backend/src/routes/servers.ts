@@ -170,13 +170,7 @@ export function serversRouter(ctx: AppContext): Router {
   r.put(
     '/:id/mapgen',
     asyncHandler(async (req, res) => {
-      const body = parse(
-        z.object({
-          mapGen: z.record(z.string(), z.unknown()).optional(),
-          mapSettings: z.record(z.string(), z.unknown()).optional(),
-        }),
-        req.body,
-      );
+      const body = parse(z.object({ mapGen: z.record(z.string(), z.unknown()) }), req.body);
       res.json(await manager.updateMapGen(req.params.id, body));
     }),
   );
