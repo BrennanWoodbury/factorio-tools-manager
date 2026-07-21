@@ -76,6 +76,15 @@ const MIGRATIONS: Migration[] = [
     // desired_state is 'running' but whose container isn't are resumed.
     up: (db) => db.exec("ALTER TABLE servers ADD COLUMN desired_state TEXT NOT NULL DEFAULT 'stopped'"),
   },
+  {
+    version: 9,
+    // Scheduled backup config per server.
+    up: (db) => {
+      db.exec('ALTER TABLE servers ADD COLUMN auto_backup INTEGER NOT NULL DEFAULT 0');
+      db.exec('ALTER TABLE servers ADD COLUMN backup_interval_minutes INTEGER NOT NULL DEFAULT 60');
+      db.exec('ALTER TABLE servers ADD COLUMN backup_keep INTEGER NOT NULL DEFAULT 10');
+    },
+  },
 ];
 
 export function runMigrations(db: DB): void {

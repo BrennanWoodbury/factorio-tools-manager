@@ -16,8 +16,18 @@ export interface Server {
   appliedModpackId: string | null;
   factorioTag: string;
   autoRestart: boolean;
+  autoBackup: boolean;
+  backupIntervalMinutes: number;
+  backupKeep: number;
   factorioImage?: string;
   connectHost?: string;
+}
+
+export interface BackupInfo {
+  name: string;
+  source: string;
+  sizeBytes: number;
+  createdAt: string;
 }
 
 export interface ServerStatus {

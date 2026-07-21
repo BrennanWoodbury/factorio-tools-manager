@@ -258,6 +258,52 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  // ---- Backups ----
+
+  r.get(
+    '/:id/backups',
+    asyncHandler(async (req, res) => {
+      res.json({ backups: manager.listBackups(req.params.id) });
+    }),
+  );
+
+  r.post(
+    '/:id/backups',
+    asyncHandler(async (req, res) => {
+      const body = parse(z.object({ saveName: z.string().max(100).optional() }), req.body ?? {});
+      const result = await manager.backupNow(req.params.id, body.saveName);
+      res.status(201).json({ ...result, backups: manager.listBackups(req.params.id) });
+    }),
+  );
+
+  r.get(
+    '/:id/backups/:name/download',
+    asyncHandler(async (req, res) => {
+      manager.get(req.params.id);
+      const name = sanitizeName(req.params.name);
+      const buf = serverFiles.readBackup(req.params.id, name);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${name}.zip"`);
+      res.send(buf);
+    }),
+  );
+
+  r.post(
+    '/:id/backups/:name/restore',
+    asyncHandler(async (req, res) => {
+      const source = await manager.restoreBackup(req.params.id, sanitizeName(req.params.name));
+      res.json({ restoredTo: source });
+    }),
+  );
+
+  r.delete(
+    '/:id/backups/:name',
+    asyncHandler(async (req, res) => {
+      manager.deleteBackup(req.params.id, sanitizeName(req.params.name));
+      res.status(204).end();
+    }),
+  );
+
   // ---- Mods ----
 
   r.get(

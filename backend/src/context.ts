@@ -10,6 +10,7 @@ import { RconService } from './services/rconService.js';
 import { ServerManager } from './services/serverManager.js';
 import { ModService } from './services/modService.js';
 import { DdnsJob } from './jobs/ddns.js';
+import { BackupJob } from './jobs/backup.js';
 
 /** Wires up all singletons from config. Built once at startup. */
 export interface AppContext {
@@ -24,6 +25,7 @@ export interface AppContext {
   modpacks: ModpackService;
   manager: ServerManager;
   ddns: DdnsJob;
+  backups: BackupJob;
 }
 
 export function buildContext(config: AppConfig): AppContext {
@@ -38,5 +40,6 @@ export function buildContext(config: AppConfig): AppContext {
   const modpacks = new ModpackService(modpacksRepo, repo, mods);
   const manager = new ServerManager(db, repo, allocator, docker, dns, rcon, config);
   const ddns = new DdnsJob(dns);
-  return { config, db, repo, allocator, docker, dns, rcon, mods, modpacks, manager, ddns };
+  const backups = new BackupJob(manager);
+  return { config, db, repo, allocator, docker, dns, rcon, mods, modpacks, manager, ddns, backups };
 }

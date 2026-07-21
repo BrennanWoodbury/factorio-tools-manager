@@ -31,6 +31,10 @@ export interface ServerRow {
   adminlist_json: string | null;
   /** User's intended run state: 'running' | 'stopped'. Migration v8. */
   desired_state: string;
+  /** Scheduled backups. Migration v9. */
+  auto_backup: number;
+  backup_interval_minutes: number;
+  backup_keep: number;
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */
@@ -53,6 +57,9 @@ export interface ServerDto {
   /** Per-server image tag ('' = global default). */
   factorioTag: string;
   autoRestart: boolean;
+  autoBackup: boolean;
+  backupIntervalMinutes: number;
+  backupKeep: number;
   /** Resolved Docker image the server will run (repo:tag). */
   factorioImage?: string;
   /** Fully-qualified connect hostname players use, when DNS is enabled. */
@@ -78,6 +85,9 @@ export function toDto(row: ServerRow, connectHost?: string, factorioImage?: stri
     appliedModpackId: row.applied_modpack_id ?? null,
     factorioTag: row.factorio_tag ?? '',
     autoRestart: row.auto_restart === 1,
+    autoBackup: row.auto_backup === 1,
+    backupIntervalMinutes: row.backup_interval_minutes,
+    backupKeep: row.backup_keep,
     factorioImage,
     connectHost,
   };

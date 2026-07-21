@@ -1,5 +1,6 @@
 import type {
   ApplyResult,
+  BackupInfo,
   CatalogEntry,
   DnsSettings,
   ModEntry,
@@ -93,6 +94,19 @@ export const api = {
   },
   downloadSaveUrl: (id: string, name: string) =>
     `/api/servers/${id}/saves/${encodeURIComponent(name)}/download`,
+
+  // backups
+  listBackups: (id: string) => req<{ backups: BackupInfo[] }>('GET', `/servers/${id}/backups`),
+  backupNow: (id: string, saveName?: string) =>
+    req<{ name: string; source: string; backups: BackupInfo[] }>('POST', `/servers/${id}/backups`, {
+      saveName,
+    }),
+  restoreBackup: (id: string, name: string) =>
+    req<{ restoredTo: string }>('POST', `/servers/${id}/backups/${encodeURIComponent(name)}/restore`),
+  deleteBackup: (id: string, name: string) =>
+    req<void>('DELETE', `/servers/${id}/backups/${encodeURIComponent(name)}`),
+  downloadBackupUrl: (id: string, name: string) =>
+    `/api/servers/${id}/backups/${encodeURIComponent(name)}/download`,
 
   // mods
   getMods: (id: string) => req<{ mods: ModEntry[] }>('GET', `/servers/${id}/mods`),

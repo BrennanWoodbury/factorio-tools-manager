@@ -128,6 +128,9 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Console:** live RCON console + player list (over loopback / Docker network only).
 - **Saves:** upload a `.zip`, list, create a new named save on demand (offline, via a one-shot
   container), pick which to load next, download, delete.
+- **Backups:** on-demand snapshots (kept under the server's `backups/` dir) plus **scheduled
+  automatic backups** per server (toggle + interval + keep-newest-N). Backing up a running server
+  forces a fresh save via RCON first. List, download, restore (into a save; server stopped), delete.
 - **Server settings:** edit the full `server-settings.json` (visibility, game password, autosave,
   `allow_commands`, AFK kick, pause rules, …) via a structured form plus a raw-JSON escape hatch.
 - **Auto-restart on change:** an optional per-server toggle — when on, saving a change that only
@@ -243,6 +246,7 @@ for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id)
 | GET/PUT | `/servers/:id/settings` | full server-settings.json body |
 | GET/PUT | `/servers/:id/{whitelist,adminlist}` · `/global/{whitelist,adminlist}` | per-server / global whitelist + admin list |
 | GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / create / select / download / delete |
+| GET/POST/DELETE | `/servers/:id/backups[...]` | list / create / download / restore / delete |
 | GET/PUT | `/servers/:id/mods` | get / apply mod list |
 | POST | `/servers/:id/mods/{upload,update,deleteAll}` · GET `/mods/export` | mod ops |
 | GET | `/mods/search?q=` | search the mod portal catalog |

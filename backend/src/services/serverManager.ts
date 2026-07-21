@@ -35,6 +35,9 @@ export interface UpdateServerInput {
   factorioToken?: string;
   factorioTag?: string;
   autoRestart?: boolean;
+  autoBackup?: boolean;
+  backupIntervalMinutes?: number;
+  backupKeep?: number;
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -122,6 +125,9 @@ export class ServerManager {
       auto_restart: input.autoRestart ? 1 : 0,
       adminlist_json: null,
       desired_state: 'stopped',
+      auto_backup: 0,
+      backup_interval_minutes: 60,
+      backup_keep: 10,
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
@@ -197,6 +203,15 @@ export class ServerManager {
       const ar = input.autoRestart ? 1 : 0;
       if (ar !== current.auto_restart) set('auto_restart', ar, false); // toggling it isn't restart-worthy
     }
+    // Backup config — never requires a game restart.
+    if (input.autoBackup !== undefined) {
+      const ab = input.autoBackup ? 1 : 0;
+      if (ab !== current.auto_backup) set('auto_backup', ab, false);
+    }
+    if (input.backupIntervalMinutes !== undefined && input.backupIntervalMinutes !== current.backup_interval_minutes)
+      set('backup_interval_minutes', Math.max(5, Math.floor(input.backupIntervalMinutes)), false);
+    if (input.backupKeep !== undefined && input.backupKeep !== current.backup_keep)
+      set('backup_keep', Math.max(1, Math.floor(input.backupKeep)), false);
 
     let subdomainChanged = false;
     if (input.subdomain !== undefined && input.subdomain !== current.subdomain) {
@@ -414,6 +429,74 @@ export class ServerManager {
       throw new DockerError(`save generation failed (exit ${exitCode}): ${logs.slice(-500)}`);
     }
     return { name };
+  }
+
+  // ---- Backups ----
+
+  /**
+   * Create a backup of a save. If the server is running, first force a fresh save
+   * over RCON (best-effort) so the backup captures current state. Backs up the
+   * given save, or the newest one. Prunes to the server's keep count.
+   */
+  async backupNow(id: string, saveName?: string): Promise<{ name: string; source: string }> {
+    const row = this.get(id);
+    let cs;
+    try {
+      cs = await this.docker.status(id);
+    } catch {
+      cs = { running: false } as { running: boolean };
+    }
+    if (cs.running) {
+      try {
+        await this.rcon.send(row, '/server-save');
+        await new Promise((r) => setTimeout(r, 2500)); // let the save flush to disk
+      } catch (err) {
+        console.warn(`[backup] /server-save on ${id} failed: ${(err as Error).message}`);
+      }
+    }
+    const source = saveName ?? serverFiles.latestSaveName(id);
+    if (!source) throw new ValidationError('No save available to back up');
+    const name = serverFiles.backupSave(id, source);
+    serverFiles.pruneBackups(id, row.backup_keep);
+    kvSet(this.db, `backup_last_${id}`, String(Date.now()));
+    return { name, source };
+  }
+
+  listBackups(id: string) {
+    this.get(id);
+    return serverFiles.listBackups(id);
+  }
+
+  deleteBackup(id: string, name: string): void {
+    this.get(id);
+    serverFiles.deleteBackup(id, name);
+  }
+
+  /** Restore a backup into saves/ and select it. Server must be stopped. */
+  async restoreBackup(id: string, name: string): Promise<string> {
+    this.get(id);
+    if ((await this.docker.status(id).catch(() => ({ running: false }))).running) {
+      throw new ValidationError('Stop the server before restoring a backup');
+    }
+    const source = serverFiles.restoreBackup(id, name);
+    await this.update(id, { saveName: source, generateNewSave: false });
+    return source;
+  }
+
+  /** Run scheduled backups for any auto-backup server whose interval has elapsed. */
+  async runDueBackups(): Promise<void> {
+    const now = Date.now();
+    for (const row of this.repo.list()) {
+      if (row.auto_backup !== 1) continue;
+      const last = Number(kvGet(this.db, `backup_last_${row.id}`) ?? 0);
+      if (now - last < row.backup_interval_minutes * 60_000) continue;
+      try {
+        const { name } = await this.backupNow(row.id);
+        console.log(`[backup] auto-backed up ${row.subdomain}: ${name}`);
+      } catch (err) {
+        console.warn(`[backup] auto-backup of ${row.id} failed: ${(err as Error).message}`);
+      }
+    }
   }
 
   async stop(id: string): Promise<void> {

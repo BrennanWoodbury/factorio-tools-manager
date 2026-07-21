@@ -44,6 +44,7 @@ async function main() {
   }
 
   ctx.ddns.start();
+  ctx.backups.start();
 
   const app = express();
   app.use(cors({ origin: true, credentials: true }));
@@ -93,6 +94,7 @@ async function main() {
     shuttingDown = true;
     console.log('[factorio-manager] shutting down');
     ctx.ddns.stop();
+    ctx.backups.stop();
     if (config.stopServersOnShutdown) {
       try {
         const n = await ctx.docker.stopAllManaged(config.shutdownStopTimeoutSecs);

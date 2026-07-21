@@ -155,6 +155,84 @@ export class ServerFilesService {
     fs.writeFileSync(path_, JSON.stringify(names, null, 2));
   }
 
+  // ---- Backups ----
+
+  backupsDir(serverId: string): string {
+    return path.join(this.localDir(serverId), 'backups');
+  }
+
+  backupPath(serverId: string, backupName: string): string {
+    return path.join(this.backupsDir(serverId), `${sanitizeName(backupName)}.zip`);
+  }
+
+  /** Newest save by mtime, or undefined if there are none. */
+  latestSaveName(serverId: string): string | undefined {
+    return this.listSaves(serverId)[0]?.name; // listSaves is sorted newest-first
+  }
+
+  /**
+   * Copy a save into backups/ as `<save>__<timestamp>.zip`. Returns the backup name.
+   * The `<save>__` prefix lets restore recover the original save name.
+   */
+  backupSave(serverId: string, saveName: string): string {
+    const src = this.savePath(serverId, saveName);
+    if (!fs.existsSync(src)) throw new NotFoundError(`Save "${saveName}"`);
+    fs.mkdirSync(this.backupsDir(serverId), { recursive: true });
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const name = `${sanitizeName(saveName)}__${ts}`;
+    fs.copyFileSync(src, this.backupPath(serverId, name));
+    return name;
+  }
+
+  listBackups(serverId: string): { name: string; source: string; sizeBytes: number; createdAt: string }[] {
+    const dir = this.backupsDir(serverId);
+    if (!fs.existsSync(dir)) return [];
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.zip'))
+      .map((f) => {
+        const name = f.replace(/\.zip$/, '');
+        const stat = fs.statSync(path.join(dir, f));
+        return {
+          name,
+          source: name.split('__')[0],
+          sizeBytes: stat.size,
+          createdAt: stat.mtime.toISOString(),
+        };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  readBackup(serverId: string, backupName: string): Buffer {
+    const p = this.backupPath(serverId, backupName);
+    if (!fs.existsSync(p)) throw new NotFoundError(`Backup "${backupName}"`);
+    return fs.readFileSync(p);
+  }
+
+  deleteBackup(serverId: string, backupName: string): void {
+    const p = this.backupPath(serverId, backupName);
+    if (fs.existsSync(p)) fs.rmSync(p);
+  }
+
+  /** Copy a backup into saves/ under its original save name. Returns that name. */
+  restoreBackup(serverId: string, backupName: string): string {
+    const p = this.backupPath(serverId, backupName);
+    if (!fs.existsSync(p)) throw new NotFoundError(`Backup "${backupName}"`);
+    const source = sanitizeName(backupName.split('__')[0] || backupName);
+    this.ensureDirs(serverId);
+    fs.copyFileSync(p, this.savePath(serverId, source));
+    return source;
+  }
+
+  /** Keep only the newest `keep` backups; delete the rest. */
+  pruneBackups(serverId: string, keep: number): number {
+    if (keep <= 0) return 0;
+    const backups = this.listBackups(serverId); // newest-first
+    const stale = backups.slice(keep);
+    for (const b of stale) this.deleteBackup(serverId, b.name);
+    return stale.length;
+  }
+
   // ---- Admin list ----
 
   adminlistPath(serverId: string): string {

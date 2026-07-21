@@ -4,6 +4,7 @@ import type { Server, ServerStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { Console } from './Console';
 import { SavesPanel } from './SavesPanel';
+import { BackupsPanel } from './BackupsPanel';
 import { ModsPanel } from './ModsPanel';
 import { SettingsPanel } from './SettingsPanel';
 import { LifecycleControls } from './LifecycleControls';
@@ -80,7 +81,12 @@ export function ServerDetail({ id, onBack }: { id: string; onBack: () => void })
 
       {tab === 'overview' && <Overview server={server} status={status} />}
       {tab === 'console' && <Console id={id} running={running} />}
-      {tab === 'saves' && <SavesPanel server={server} onChanged={load} />}
+      {tab === 'saves' && (
+        <>
+          <SavesPanel server={server} onChanged={load} />
+          <BackupsPanel server={server} onChanged={load} />
+        </>
+      )}
       {tab === 'mods' && <ModsPanel server={server} />}
       {tab === 'settings' && <SettingsPanel server={server} onChanged={load} onDeleted={onBack} />}
     </>
