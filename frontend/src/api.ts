@@ -148,6 +148,15 @@ export const api = {
   },
   exportModsUrl: (id: string) => `/api/servers/${id}/mods/export`,
 
+  // whitelist
+  getWhitelist: (id: string) =>
+    req<{ whitelist: string[] }>('GET', `/servers/${id}/whitelist`),
+  setWhitelist: (id: string, whitelist: string[]) =>
+    req<{ whitelist: string[] }>('PUT', `/servers/${id}/whitelist`, { whitelist }),
+  getGlobalWhitelist: () => req<{ whitelist: string[] }>('GET', '/global/whitelist'),
+  setGlobalWhitelist: (whitelist: string[]) =>
+    req<{ whitelist: string[] }>('PUT', '/global/whitelist', { whitelist }),
+
   // rcon
   rcon: (id: string, command: string) =>
     req<{ response: string }>('POST', `/servers/${id}/rcon`, { command }),

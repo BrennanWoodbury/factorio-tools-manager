@@ -14,6 +14,8 @@ export interface Server {
   createdAt: string;
   updatedAt: string;
   appliedModpackId: string | null;
+  factorioTag: string;
+  factorioImage?: string;
   connectHost?: string;
 }
 

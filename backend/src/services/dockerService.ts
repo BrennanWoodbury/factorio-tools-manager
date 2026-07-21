@@ -43,6 +43,63 @@ export class DockerService {
     return `ftm-${serverId}`;
   }
 
+  /**
+   * Resolve the Docker image for a server. A per-server `factorio_tag` overrides
+   * just the tag of the configured base repo (e.g. FACTORIO_IMAGE
+   * `factoriotools/factorio:stable` + tag `latest` => `factoriotools/factorio:latest`);
+   * empty tag uses the global image as-is.
+   */
+  imageFor(server: ServerRow): string {
+    const tag = (server.factorio_tag ?? '').trim();
+    if (!tag) return this.config.factorioImage;
+    const base = this.config.factorioImage;
+    // Split off the existing tag, being careful not to treat a registry port
+    // (host:5000/...) as a tag: the tag colon must come after the last slash.
+    const lastColon = base.lastIndexOf(':');
+    const lastSlash = base.lastIndexOf('/');
+    const repo = lastColon > lastSlash ? base.slice(0, lastColon) : base;
+    return `${repo}:${tag}`;
+  }
+
+  /**
+   * Ensure an image is available, pulling on EVERY call so moving tags (stable,
+   * latest) pick up updates on each container (re)create. If the pull fails but we
+   * already have a local copy (e.g. registry unreachable / offline), we proceed
+   * with the local image rather than blocking the start.
+   */
+  async ensureImage(image: string): Promise<void> {
+    try {
+      console.log(`[docker] pulling ${image} (checking for updates) …`);
+      await this.pullImage(image);
+      console.log(`[docker] ${image} up to date`);
+    } catch (pullErr) {
+      try {
+        await this.docker.getImage(image).inspect();
+        console.warn(
+          `[docker] pull ${image} failed (${(pullErr as Error).message}); using local copy`,
+        );
+      } catch {
+        throw pullErr instanceof DockerError
+          ? pullErr
+          : new DockerError(`image ${image} unavailable: ${(pullErr as Error).message}`);
+      }
+    }
+  }
+
+  private pullImage(image: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.docker.pull(image, (err: Error | null, stream: NodeJS.ReadableStream) => {
+        if (err || !stream) {
+          reject(new DockerError(`pull ${image} failed: ${err?.message ?? 'no stream'}`));
+          return;
+        }
+        this.docker.modem.followProgress(stream, (doneErr: Error | null) =>
+          doneErr ? reject(new DockerError(`pull ${image} failed: ${doneErr.message}`)) : resolve(),
+        );
+      });
+    });
+  }
+
   async ping(): Promise<void> {
     try {
       await this.docker.ping();
@@ -91,10 +148,12 @@ export class DockerService {
   async createContainer(server: ServerRow, hostDataDir: string): Promise<string> {
     const gamePort = String(server.game_port);
     const rconPort = String(server.rcon_port);
+    const image = this.imageFor(server);
+    await this.ensureImage(image);
     try {
       const container = await this.docker.createContainer({
         name: this.containerName(server.id),
-        Image: this.config.factorioImage,
+        Image: image,
         Env: this.envFor(server),
         ExposedPorts: {
           [`${GAME_PORT_INTERNAL}/udp`]: {},
@@ -141,11 +200,13 @@ export class DockerService {
     timeoutMs = 120_000,
   ): Promise<{ exitCode: number; logs: string }> {
     const name = `${this.containerName(server.id)}-job-${randomBytes(4).toString('hex')}`;
+    const image = this.imageFor(server);
+    await this.ensureImage(image);
     let container: Docker.Container | undefined;
     try {
       container = await this.docker.createContainer({
         name,
-        Image: this.config.factorioImage,
+        Image: image,
         Entrypoint: ['/opt/factorio/bin/x64/factorio'],
         Cmd: args,
         Labels: { [MANAGED_LABEL]: 'true', [SERVER_ID_LABEL]: server.id },

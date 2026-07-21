@@ -3,6 +3,8 @@ import { api } from '../api';
 import type { Server } from '../types';
 import { run } from '../ui';
 import { AdvancedSettings } from './AdvancedSettings';
+import { WhitelistPanel } from './WhitelistPanel';
+import { FactorioTagSelect } from './FactorioTagSelect';
 
 export function SettingsPanel({
   server,
@@ -19,11 +21,18 @@ export function SettingsPanel({
   const [description, setDescription] = useState(server.description);
   const [modUser, setModUser] = useState('');
   const [modToken, setModToken] = useState('');
+  const [factorioTag, setFactorioTag] = useState(server.factorioTag);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     setBusy(true);
-    const patch: Record<string, unknown> = { name, subdomain, maxPlayers, description };
+    const patch: Record<string, unknown> = {
+      name,
+      subdomain,
+      maxPlayers,
+      description,
+      factorioTag,
+    };
     if (modUser) patch.factorioUsername = modUser;
     if (modToken) patch.factorioToken = modToken;
     await run(() => api.updateServer(server.id, patch), 'Settings saved');
@@ -56,6 +65,12 @@ export function SettingsPanel({
         <label>Description</label>
         <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
 
+        <FactorioTagSelect value={factorioTag} onChange={setFactorioTag} />
+        <div className="small muted" style={{ marginTop: 4 }}>
+          Currently runs <span className="mono">{server.factorioImage ?? 'the default image'}</span>.
+          The image is pulled (checking for updates) on every start/restart.
+        </div>
+
         <details style={{ marginTop: 12 }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>
             Update Factorio.com credentials (mods & public listing){' '}
@@ -78,6 +93,13 @@ export function SettingsPanel({
       </div>
 
       <AdvancedSettings serverId={server.id} />
+
+      <WhitelistPanel
+        title="Player whitelist"
+        description="Only these Factorio usernames may join this server (in addition to the global whitelist). Applies on next start/restart."
+        load={async () => (await api.getWhitelist(server.id)).whitelist}
+        save={async (names) => (await api.setWhitelist(server.id, names)).whitelist}
+      />
 
       <div className="panel" style={{ borderColor: 'var(--red)' }}>
         <h2 style={{ color: 'var(--red)' }}>Danger zone</h2>

@@ -1,6 +1,6 @@
 import { randomUUID, randomBytes } from 'node:crypto';
 import type { AppConfig } from '../config.js';
-import type { DB } from '../db/index.js';
+import { kvGet, kvSet, type DB } from '../db/index.js';
 import type { ServerRow } from '../db/models.js';
 import { ServersRepo } from '../db/serversRepo.js';
 import { PortAllocator } from './portAllocator.js';
@@ -19,6 +19,7 @@ export interface CreateServerInput {
   generateNewSave?: boolean;
   factorioUsername?: string;
   factorioToken?: string;
+  factorioTag?: string;
   mods?: ModEntry[];
 }
 
@@ -31,9 +32,12 @@ export interface UpdateServerInput {
   generateNewSave?: boolean;
   factorioUsername?: string;
   factorioToken?: string;
+  factorioTag?: string;
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+// Valid Docker image tag (also allow empty to mean "use the global default").
+const TAG_RE = /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}$/;
 
 /**
  * Orchestrates a server's whole lifecycle across the allocator, Docker, DNS and
@@ -57,6 +61,15 @@ export class ServerManager {
         'Subdomain must be a valid DNS label: lowercase letters, digits and hyphens',
       );
     }
+  }
+
+  /** Validate an image tag; returns the trimmed tag ('' means default). */
+  private cleanTag(tag: string | undefined): string {
+    const t = (tag ?? '').trim();
+    if (t !== '' && !TAG_RE.test(t)) {
+      throw new ValidationError('Factorio tag must be a valid Docker image tag (e.g. stable, 2.0.55)');
+    }
+    return t;
   }
 
   list(): ServerRow[] {
@@ -102,6 +115,8 @@ export class ServerManager {
       updated_at: '',
       settings_json: null,
       applied_modpack_id: null,
+      whitelist_json: null,
+      factorio_tag: this.cleanTag(input.factorioTag),
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
@@ -150,6 +165,7 @@ export class ServerManager {
     if (input.generateNewSave !== undefined) fields.generate_new_save = input.generateNewSave ? 1 : 0;
     if (input.factorioUsername !== undefined) fields.factorio_username = input.factorioUsername;
     if (input.factorioToken !== undefined) fields.factorio_token = input.factorioToken;
+    if (input.factorioTag !== undefined) fields.factorio_tag = this.cleanTag(input.factorioTag);
 
     let subdomainChanged = false;
     if (input.subdomain !== undefined && input.subdomain !== current.subdomain) {
@@ -189,12 +205,69 @@ export class ServerManager {
     return serverFiles.getAdvancedSettings(this.get(id));
   }
 
+  // ---- Whitelist ----
+
+  /** Sanitise a list of usernames: trim, drop blanks, dedupe (case-insensitive). */
+  private sanitizeNames(names: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of names) {
+      const name = String(raw).trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(name);
+    }
+    return out;
+  }
+
+  getServerWhitelist(id: string): string[] {
+    const row = this.get(id);
+    if (!row.whitelist_json) return [];
+    try {
+      return JSON.parse(row.whitelist_json) as string[];
+    } catch {
+      return [];
+    }
+  }
+
+  setServerWhitelist(id: string, names: string[]): string[] {
+    this.get(id); // 404 if unknown
+    const clean = this.sanitizeNames(names);
+    this.repo.setWhitelistJson(id, JSON.stringify(clean));
+    return clean;
+  }
+
+  getGlobalWhitelist(): string[] {
+    const raw = kvGet(this.db, 'global_whitelist');
+    if (!raw) return [];
+    try {
+      return JSON.parse(raw) as string[];
+    } catch {
+      return [];
+    }
+  }
+
+  setGlobalWhitelist(names: string[]): string[] {
+    const clean = this.sanitizeNames(names);
+    kvSet(this.db, 'global_whitelist', JSON.stringify(clean));
+    return clean;
+  }
+
+  /** Effective whitelist for a server = global ∪ per-server (deduped). */
+  effectiveWhitelist(id: string): string[] {
+    return this.sanitizeNames([...this.getGlobalWhitelist(), ...this.getServerWhitelist(id)]);
+  }
+
   async start(id: string): Promise<void> {
     const row = this.get(id);
     await this.docker.ensureNetwork();
     // Recreate the container each start so it always reflects current config
     // (env vars, ports). Data lives in the bind mount, so this is cheap.
     serverFiles.writeServerSettings(row);
+    // Effective whitelist = global ∪ per-server. Written (or cleared) each start.
+    serverFiles.writeWhitelist(id, this.effectiveWhitelist(id));
     await this.docker.remove(id);
     const containerId = await this.docker.createContainer(row, serverFiles.hostDir(id));
     await this.docker.start(id);

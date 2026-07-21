@@ -13,11 +13,11 @@ export class ServersRepo {
         `INSERT INTO servers
           (id, name, subdomain, description, max_players, game_port, rcon_port,
            rcon_password, save_name, generate_new_save, factorio_username,
-           factorio_token, container_id, status)
+           factorio_token, factorio_tag, container_id, status)
          VALUES
           (@id, @name, @subdomain, @description, @max_players, @game_port, @rcon_port,
            @rcon_password, @save_name, @generate_new_save, @factorio_username,
-           @factorio_token, @container_id, @status)`,
+           @factorio_token, @factorio_tag, @container_id, @status)`,
       )
       // node:sqlite supports named params via an object argument
       .run(row as unknown as NamedParams);
@@ -80,6 +80,12 @@ export class ServersRepo {
   setSettingsJson(id: string, json: string): void {
     this.db
       .prepare("UPDATE servers SET settings_json = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(json, id);
+  }
+
+  setWhitelistJson(id: string, json: string): void {
+    this.db
+      .prepare("UPDATE servers SET whitelist_json = ?, updated_at = datetime('now') WHERE id = ?")
       .run(json, id);
   }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api';
 import { toastError, toastSuccess } from '../ui';
+import { FactorioTagSelect } from './FactorioTagSelect';
 
 export function CreateServerForm({
   onClose,
@@ -17,6 +18,7 @@ export function CreateServerForm({
   const [description, setDescription] = useState('');
   const [modUser, setModUser] = useState('');
   const [modToken, setModToken] = useState('');
+  const [factorioTag, setFactorioTag] = useState('stable');
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
@@ -31,6 +33,7 @@ export function CreateServerForm({
         generateNewSave: true,
         factorioUsername: modUser || undefined,
         factorioToken: modToken || undefined,
+        factorioTag: factorioTag.trim() || undefined,
       });
       toastSuccess(`Created "${server.name}"`);
       onCreated(server.id);
@@ -93,6 +96,8 @@ export function CreateServerForm({
 
         <label>Description</label>
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+
+        <FactorioTagSelect value={factorioTag} onChange={setFactorioTag} />
 
         <details style={{ marginTop: 12 }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>
