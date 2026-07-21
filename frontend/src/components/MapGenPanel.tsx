@@ -188,7 +188,7 @@ export function MapGenPanel({ server }: { server: Server }) {
               {t.label}
             </div>
             <Slider
-              label="Frequency"
+              label={t.key === 'water' ? 'Scale' : 'Frequency'}
               value={control(t.key, 'frequency')}
               onChange={(v) => setControl(t.key, 'frequency', v)}
             />
