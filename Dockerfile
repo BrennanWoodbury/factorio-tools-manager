@@ -27,4 +27,8 @@ RUN npm ci --omit=dev
 COPY --from=backend-build /app/backend/dist ./dist
 COPY --from=frontend /app/frontend/dist /app/frontend/dist
 EXPOSE 8080
+# Liveness: any HTTP response from the API (even 401) means the server is up.
+# Uses Node's built-in fetch so no curl/wget is needed in the image.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:8080/api/system/status').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
 CMD ["node", "dist/index.js"]
