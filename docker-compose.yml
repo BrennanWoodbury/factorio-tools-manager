@@ -21,11 +21,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
 
       # --- Data ---
-      DATA_DIR: /data
-      # IMPORTANT: absolute path ON THE HOST to ./data/servers. The manager passes
-      # this to the Docker daemon as the bind-mount source for each Factorio
-      # container, so it must be the host path, not the in-container /data path.
-      HOST_SERVERS_DIR: ${HOST_SERVERS_DIR:?set HOST_SERVERS_DIR to the absolute host path of ./data/servers}
+      # Data lives at this path on BOTH the host and inside the container (identity
+      # bind mount, below). Because the path is identical on both sides, the
+      # backend's default HOST_SERVERS_DIR = DATA_DIR/servers is already correct for
+      # the host Docker daemon — so there is nothing else to configure. Override
+      # FTM_DATA_DIR to relocate (e.g. FTM_DATA_DIR=$HOME/.factorio-tools-manager).
+      DATA_DIR: ${FTM_DATA_DIR:-/opt/factorio-tools-manager}
 
       # --- Port pools (must match what you forwarded on the router) ---
       GAME_PORT_RANGE: ${GAME_PORT_RANGE:-34197-34297}
@@ -48,8 +49,11 @@ services:
     volumes:
       # Manage sibling containers via the host Docker daemon.
       - /var/run/docker.sock:/var/run/docker.sock
-      # Persistent data: SQLite DB + per-server save/mod/config dirs.
-      - ./data:/data
+      # Persistent data (SQLite DB + per-server save/mod/config dirs), bind-mounted
+      # at the SAME absolute path host-side and container-side. This identity makes
+      # DATA_DIR/servers a valid host path for the Factorio containers' bind mounts,
+      # so HOST_SERVERS_DIR needs no separate configuration.
+      - ${FTM_DATA_DIR:-/opt/factorio-tools-manager}:${FTM_DATA_DIR:-/opt/factorio-tools-manager}
     networks:
       - factorio-net
 

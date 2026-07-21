@@ -78,15 +78,17 @@ can't carry Factorio's UDP protocol.
 
 ```bash
 cp .env.example .env
-# edit .env — at minimum set ADMIN_PASSWORD and HOST_SERVERS_DIR
+# edit .env — at minimum set ADMIN_PASSWORD (that's the only required var)
 docker compose up -d --build
 ```
 
 Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 
-> **`HOST_SERVERS_DIR` must be the absolute host path to `./data/servers`.** The manager runs in
-> a container but creates Factorio containers on the host Docker daemon, which needs the real host
-> path for their bind mounts. Example: `HOST_SERVERS_DIR=/home/you/factorio-manager/data/servers`.
+> **Data location.** Persistent data (SQLite DB + per-server saves/mods/config) is stored at
+> `/opt/factorio-tools-manager`, bind-mounted at the *same* path inside and outside the container.
+> That identity is deliberate: it makes the host path the Factorio containers bind-mount
+> (`<data>/servers/<id>`) valid on the host with no extra configuration. Override with `FTM_DATA_DIR`
+> (e.g. `FTM_DATA_DIR=$HOME/.factorio-tools-manager`).
 
 ---
 
@@ -97,8 +99,9 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 | `ADMIN_PASSWORD`        | ✅       | —                              | Web UI login password |
 | `WEB_PORT`              |          | `8080` (prod) / `5173` (dev)   | Host port for the web UI; `API_PORT` (dev only) for the backend |
 | `JWT_SECRET`            |          | derived                        | Signs session cookies; set your own (`openssl rand -hex 32`) |
-| `HOST_SERVERS_DIR`      | ✅ (docker) | —                           | Absolute **host** path to `./data/servers` |
-| `DATA_DIR`              |          | `/data`                        | Where the SQLite DB + server data live (in-container) |
+| `FTM_DATA_DIR`          |          | `/opt/factorio-tools-manager`  | Data location; identity-mounted host↔container (prod compose) |
+| `DATA_DIR`              |          | `FTM_DATA_DIR`                 | In-container data path (host-mode dev defaults to `../data`) |
+| `HOST_SERVERS_DIR`      |          | `DATA_DIR/servers`             | Host bind-mount source; auto-correct via the identity mount |
 | `GAME_PORT_RANGE`       |          | `34197-34297`                  | Pre-forwarded UDP game-port pool |
 | `RCON_PORT_RANGE`       |          | `27015-27115`                  | Loopback-only RCON port pool |
 | `FACTORIO_IMAGE`        |          | `factoriotools/factorio:stable`| Base game server image |
