@@ -128,6 +128,10 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   container), pick which to load next, download, delete.
 - **Server settings:** edit the full `server-settings.json` (visibility, game password, autosave,
   `allow_commands`, AFK kick, pause rules, …) via a structured form plus a raw-JSON escape hatch.
+- **Auto-restart on change:** an optional per-server toggle — when on, saving a change that only
+  takes effect at start (version/tag, server settings, mods, whitelist) automatically restarts the
+  server in the background if it's running (only when a value actually changed); otherwise changes
+  apply on the next manual start.
 - **Whitelist:** a per-server player whitelist plus a **global** whitelist that applies to every
   server. The effective list (global ∪ per-server) is written to `server-whitelist.json` on start;
   an empty list leaves the server open. Applies on next start/restart.

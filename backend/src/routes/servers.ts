@@ -20,6 +20,7 @@ const createSchema = z.object({
   factorioUsername: z.string().max(100).optional(),
   factorioToken: z.string().max(200).optional(),
   factorioTag: z.string().max(128).optional(),
+  autoRestart: z.boolean().optional(),
   mods: z.array(modEntrySchema).optional(),
 });
 
@@ -33,6 +34,7 @@ const updateSchema = z.object({
   factorioUsername: z.string().max(100).optional(),
   factorioToken: z.string().max(200).optional(),
   factorioTag: z.string().max(128).optional(),
+  autoRestart: z.boolean().optional(),
 });
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
@@ -151,7 +153,7 @@ export function serversRouter(ctx: AppContext): Router {
     '/:id/settings',
     asyncHandler(async (req, res) => {
       const body = parse(z.object({ settings: z.record(z.string(), z.unknown()) }), req.body);
-      const settings = manager.updateSettings(req.params.id, body.settings);
+      const settings = await manager.updateSettings(req.params.id, body.settings);
       res.json({ settings });
     }),
   );
@@ -169,7 +171,7 @@ export function serversRouter(ctx: AppContext): Router {
     '/:id/whitelist',
     asyncHandler(async (req, res) => {
       const body = parse(z.object({ whitelist: z.array(z.string().max(100)) }), req.body);
-      res.json({ whitelist: manager.setServerWhitelist(req.params.id, body.whitelist) });
+      res.json({ whitelist: await manager.setServerWhitelist(req.params.id, body.whitelist) });
     }),
   );
 
@@ -255,6 +257,7 @@ export function serversRouter(ctx: AppContext): Router {
       const row = manager.get(req.params.id);
       const body = parse(z.object({ mods: z.array(modEntrySchema) }), req.body);
       const result = await mods.applyModList(row, body.mods);
+      await manager.maybeAutoRestart(row.id, true);
       res.json({ mods: mods.getModList(row.id), ...result });
     }),
   );
@@ -266,6 +269,7 @@ export function serversRouter(ctx: AppContext): Router {
       const row = manager.get(req.params.id);
       if (!req.file) throw new ValidationError('Expected a multipart file field named "file"');
       const result = mods.uploadModZip(row.id, req.file.buffer);
+      await manager.maybeAutoRestart(row.id, true);
       res.status(201).json({ ...result, mods: mods.getModList(row.id) });
     }),
   );
@@ -275,6 +279,7 @@ export function serversRouter(ctx: AppContext): Router {
     asyncHandler(async (req, res) => {
       const row = manager.get(req.params.id);
       mods.deleteAllMods(row.id);
+      await manager.maybeAutoRestart(row.id, true);
       res.json({ mods: mods.getModList(row.id) });
     }),
   );
@@ -284,6 +289,7 @@ export function serversRouter(ctx: AppContext): Router {
     asyncHandler(async (req, res) => {
       const row = manager.get(req.params.id);
       const result = await mods.updateAll(row);
+      await manager.maybeAutoRestart(row.id, true);
       res.json({ mods: mods.getModList(row.id), ...result });
     }),
   );

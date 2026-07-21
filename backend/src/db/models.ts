@@ -25,6 +25,8 @@ export interface ServerRow {
   whitelist_json: string | null;
   /** Per-server Factorio image tag; empty/null => global default. Migration v5. */
   factorio_tag: string | null;
+  /** 1 = auto-restart on restart-requiring config change. Migration v6. */
+  auto_restart: number;
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */
@@ -46,6 +48,7 @@ export interface ServerDto {
   appliedModpackId: string | null;
   /** Per-server image tag ('' = global default). */
   factorioTag: string;
+  autoRestart: boolean;
   /** Resolved Docker image the server will run (repo:tag). */
   factorioImage?: string;
   /** Fully-qualified connect hostname players use, when DNS is enabled. */
@@ -70,6 +73,7 @@ export function toDto(row: ServerRow, connectHost?: string, factorioImage?: stri
     updatedAt: row.updated_at,
     appliedModpackId: row.applied_modpack_id ?? null,
     factorioTag: row.factorio_tag ?? '',
+    autoRestart: row.auto_restart === 1,
     factorioImage,
     connectHost,
   };

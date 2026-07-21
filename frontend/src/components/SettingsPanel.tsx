@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api';
 import type { Server } from '../types';
-import { run } from '../ui';
+import { run, toast } from '../ui';
 import { AdvancedSettings } from './AdvancedSettings';
 import { WhitelistPanel } from './WhitelistPanel';
 import { FactorioTagSelect } from './FactorioTagSelect';
@@ -22,7 +22,10 @@ export function SettingsPanel({
   const [modUser, setModUser] = useState('');
   const [modToken, setModToken] = useState('');
   const [factorioTag, setFactorioTag] = useState(server.factorioTag);
+  const [autoRestart, setAutoRestart] = useState(server.autoRestart);
   const [busy, setBusy] = useState(false);
+
+  const running = server.status === 'running';
 
   const save = async () => {
     setBusy(true);
@@ -32,10 +35,14 @@ export function SettingsPanel({
       maxPlayers,
       description,
       factorioTag,
+      autoRestart,
     };
     if (modUser) patch.factorioUsername = modUser;
     if (modToken) patch.factorioToken = modToken;
-    await run(() => api.updateServer(server.id, patch), 'Settings saved');
+    const ok = await run(() => api.updateServer(server.id, patch), 'Settings saved');
+    if (ok && autoRestart && running) {
+      toast('Auto-restarting the server to apply changes…', 'info');
+    }
     setModUser('');
     setModToken('');
     setBusy(false);
@@ -69,6 +76,21 @@ export function SettingsPanel({
         <div className="small muted" style={{ marginTop: 4 }}>
           Currently runs <span className="mono">{server.factorioImage ?? 'the default image'}</span>.
           The image is pulled (checking for updates) on every start/restart.
+        </div>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
+          <input
+            type="checkbox"
+            style={{ width: 'auto' }}
+            checked={autoRestart}
+            onChange={(e) => setAutoRestart(e.target.checked)}
+          />
+          Auto-restart this server when settings change
+        </label>
+        <div className="small muted" style={{ marginTop: 4 }}>
+          When on, saving a change that needs a restart (version/tag, server settings, mods,
+          whitelist) automatically restarts the server if it's running — otherwise changes apply on
+          the next manual start.
         </div>
 
         <details style={{ marginTop: 12 }}>

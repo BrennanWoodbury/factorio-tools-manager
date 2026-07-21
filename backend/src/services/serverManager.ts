@@ -20,6 +20,7 @@ export interface CreateServerInput {
   factorioUsername?: string;
   factorioToken?: string;
   factorioTag?: string;
+  autoRestart?: boolean;
   mods?: ModEntry[];
 }
 
@@ -33,6 +34,7 @@ export interface UpdateServerInput {
   factorioUsername?: string;
   factorioToken?: string;
   factorioTag?: string;
+  autoRestart?: boolean;
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -117,6 +119,7 @@ export class ServerManager {
       applied_modpack_id: null,
       whitelist_json: null,
       factorio_tag: this.cleanTag(input.factorioTag),
+      auto_restart: input.autoRestart ? 1 : 0,
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
@@ -158,14 +161,40 @@ export class ServerManager {
   async update(id: string, input: UpdateServerInput): Promise<ServerRow> {
     const current = this.get(id);
     const fields: Record<string, string | number> = {};
-    if (input.name !== undefined) fields.name = input.name.trim();
-    if (input.description !== undefined) fields.description = input.description.trim();
-    if (input.maxPlayers !== undefined) fields.max_players = input.maxPlayers;
-    if (input.saveName !== undefined) fields.save_name = input.saveName.trim() || 'default';
-    if (input.generateNewSave !== undefined) fields.generate_new_save = input.generateNewSave ? 1 : 0;
-    if (input.factorioUsername !== undefined) fields.factorio_username = input.factorioUsername;
-    if (input.factorioToken !== undefined) fields.factorio_token = input.factorioToken;
-    if (input.factorioTag !== undefined) fields.factorio_tag = this.cleanTag(input.factorioTag);
+    // Track whether anything that only takes effect at (re)start actually changed,
+    // so auto-restart fires only on a real change (not e.g. toggling auto_restart
+    // itself, or a no-op save).
+    let restartRelevantChanged = false;
+    const set = (key: string, value: string | number, restartRelevant: boolean) => {
+      fields[key] = value;
+      if (restartRelevant) restartRelevantChanged = true;
+    };
+
+    if (input.name !== undefined && input.name.trim() !== current.name) set('name', input.name.trim(), true);
+    if (input.description !== undefined && input.description.trim() !== current.description)
+      set('description', input.description.trim(), true);
+    if (input.maxPlayers !== undefined && input.maxPlayers !== current.max_players)
+      set('max_players', input.maxPlayers, true);
+    if (input.saveName !== undefined) {
+      const save = input.saveName.trim() || 'default';
+      if (save !== current.save_name) set('save_name', save, true);
+    }
+    if (input.generateNewSave !== undefined) {
+      const gen = input.generateNewSave ? 1 : 0;
+      if (gen !== current.generate_new_save) set('generate_new_save', gen, true);
+    }
+    if (input.factorioUsername !== undefined && input.factorioUsername !== current.factorio_username)
+      set('factorio_username', input.factorioUsername, true);
+    if (input.factorioToken !== undefined && input.factorioToken !== current.factorio_token)
+      set('factorio_token', input.factorioToken, true);
+    if (input.factorioTag !== undefined) {
+      const tag = this.cleanTag(input.factorioTag);
+      if (tag !== (current.factorio_tag ?? '')) set('factorio_tag', tag, true);
+    }
+    if (input.autoRestart !== undefined) {
+      const ar = input.autoRestart ? 1 : 0;
+      if (ar !== current.auto_restart) set('auto_restart', ar, false); // toggling it isn't restart-worthy
+    }
 
     let subdomainChanged = false;
     if (input.subdomain !== undefined && input.subdomain !== current.subdomain) {
@@ -173,18 +202,46 @@ export class ServerManager {
       if (this.repo.getBySubdomain(input.subdomain)) {
         throw new DuplicateSubdomainError(input.subdomain);
       }
-      fields.subdomain = input.subdomain;
+      fields.subdomain = input.subdomain; // SRV record only — no game restart needed
       subdomainChanged = true;
     }
 
     this.repo.update(id, fields as never);
     const updated = this.get(id);
 
-    // A subdomain change must update the SRV record name.
+    // A subdomain change must update the SRV record name (live, no restart).
     if (subdomainChanged) {
       await this.dns.updateServerSrv(updated);
     }
+    await this.maybeAutoRestart(id, restartRelevantChanged);
     return updated;
+  }
+
+  /**
+   * If a restart-requiring change was made, the server has auto-restart enabled,
+   * and it's currently running, kick off a restart in the background to apply it.
+   * Returns whether a restart was triggered.
+   */
+  async maybeAutoRestart(id: string, requiresRestart: boolean): Promise<boolean> {
+    if (!requiresRestart) return false;
+    const row = this.get(id);
+    if (row.auto_restart !== 1) return false;
+    // Don't let a Docker hiccup fail the settings save — just skip the restart.
+    let running = false;
+    try {
+      running = (await this.docker.status(id)).running;
+    } catch (err) {
+      console.warn(`[manager] auto-restart status check failed for ${id}: ${(err as Error).message}`);
+      return false;
+    }
+    if (!running) return false;
+    console.log(`[manager] auto-restarting ${id} to apply config change`);
+    // Fire-and-forget: don't make the settings request wait for the restart. The
+    // UI reflects it via status polling.
+    void this.restart(id).catch((err) =>
+      console.error(`[manager] auto-restart of ${id} failed: ${(err as Error).message}`),
+    );
+    return true;
   }
 
   /** The effective advanced server-settings (defaults filled, managed keys stripped). */
@@ -197,11 +254,12 @@ export class ServerManager {
    * max_players) are stripped — those are edited via the basic form/update() — so
    * there's no drift between the two. Applies to the game on next start.
    */
-  updateSettings(id: string, advanced: Record<string, unknown>): Record<string, unknown> {
+  async updateSettings(id: string, advanced: Record<string, unknown>): Promise<Record<string, unknown>> {
     this.get(id); // 404 if unknown
     const clean = { ...advanced };
     for (const k of ['name', 'description', 'max_players']) delete clean[k];
     this.repo.setSettingsJson(id, JSON.stringify(clean));
+    await this.maybeAutoRestart(id, true);
     return serverFiles.getAdvancedSettings(this.get(id));
   }
 
@@ -232,10 +290,11 @@ export class ServerManager {
     }
   }
 
-  setServerWhitelist(id: string, names: string[]): string[] {
+  async setServerWhitelist(id: string, names: string[]): Promise<string[]> {
     this.get(id); // 404 if unknown
     const clean = this.sanitizeNames(names);
     this.repo.setWhitelistJson(id, JSON.stringify(clean));
+    await this.maybeAutoRestart(id, true);
     return clean;
   }
 
@@ -249,9 +308,14 @@ export class ServerManager {
     }
   }
 
-  setGlobalWhitelist(names: string[]): string[] {
+  async setGlobalWhitelist(names: string[]): Promise<string[]> {
     const clean = this.sanitizeNames(names);
     kvSet(this.db, 'global_whitelist', JSON.stringify(clean));
+    // The global whitelist affects every server — auto-restart any running ones
+    // that opted in.
+    for (const s of this.repo.list()) {
+      await this.maybeAutoRestart(s.id, true);
+    }
     return clean;
   }
 

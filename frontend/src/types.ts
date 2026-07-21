@@ -15,6 +15,7 @@ export interface Server {
   updatedAt: string;
   appliedModpackId: string | null;
   factorioTag: string;
+  autoRestart: boolean;
   factorioImage?: string;
   connectHost?: string;
 }

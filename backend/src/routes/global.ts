@@ -65,7 +65,7 @@ export function globalRouter(ctx: AppContext): Router {
     asyncHandler(async (req, res) => {
       const parsed = z.object({ whitelist: z.array(z.string().max(100)) }).safeParse(req.body);
       if (!parsed.success) throw new ValidationError('whitelist must be an array of names');
-      res.json({ whitelist: ctx.manager.setGlobalWhitelist(parsed.data.whitelist) });
+      res.json({ whitelist: await ctx.manager.setGlobalWhitelist(parsed.data.whitelist) });
     }),
   );
 

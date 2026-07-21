@@ -56,6 +56,12 @@ const MIGRATIONS: Migration[] = [
     // use the global FACTORIO_IMAGE. Applied to the base repo of FACTORIO_IMAGE.
     up: (db) => db.exec('ALTER TABLE servers ADD COLUMN factorio_tag TEXT'),
   },
+  {
+    version: 6,
+    // When 1, a restart-requiring config change made while the server is running
+    // triggers an automatic restart to apply it.
+    up: (db) => db.exec('ALTER TABLE servers ADD COLUMN auto_restart INTEGER NOT NULL DEFAULT 0'),
+  },
 ];
 
 export function runMigrations(db: DB): void {

@@ -96,14 +96,18 @@ export function modpacksRouter(ctx: AppContext): Router {
     '/:id/apply',
     asyncHandler(async (req, res) => {
       const body = parse(z.object({ serverId: z.string().min(1) }), req.body);
-      res.json(await modpacks.apply(req.params.id, body.serverId));
+      const result = await modpacks.apply(req.params.id, body.serverId);
+      await ctx.manager.maybeAutoRestart(body.serverId, true);
+      res.json(result);
     }),
   );
 
   r.post(
     '/:id/apply-all',
     asyncHandler(async (req, res) => {
-      res.json({ results: await modpacks.applyToAllUsing(req.params.id) });
+      const results = await modpacks.applyToAllUsing(req.params.id);
+      for (const rslt of results) await ctx.manager.maybeAutoRestart(rslt.serverId, true);
+      res.json({ results });
     }),
   );
 
