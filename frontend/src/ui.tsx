@@ -66,11 +66,11 @@ function ToastItem({ notice, onDismiss }: { notice: Notice; onDismiss: () => voi
       className={`toast ${notice.kind}`}
       onMouseEnter={() => clearTimeout(timer.current)}
       onMouseLeave={startTimer}
-      onClick={onDismiss}
-      title="Click to dismiss"
-      style={{ cursor: 'pointer' }}
     >
-      {notice.message}
+      <span className="toast-msg">{notice.message}</span>
+      <button className="toast-close" onClick={onDismiss} title="Dismiss" aria-label="Dismiss">
+        ×
+      </button>
     </div>
   );
 }

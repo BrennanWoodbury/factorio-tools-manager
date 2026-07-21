@@ -113,11 +113,18 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
   display: flex; flex-direction: column; gap: 10px; max-width: 380px;
 }
 .toast {
-  padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--panel-2); box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
 .toast.error { border-color: var(--red); }
 .toast.success { border-color: var(--green); }
+.toast-msg { flex: 1; user-select: text; word-break: break-word; }
+.toast-close {
+  flex: 0 0 auto; background: transparent; border: none; color: var(--muted);
+  font-size: 18px; line-height: 1; padding: 0 2px; cursor: pointer;
+}
+.toast-close:hover { color: var(--text); }
 
 /* Notifications center */
 .notif-badge {
