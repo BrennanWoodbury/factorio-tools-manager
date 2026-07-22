@@ -14,6 +14,8 @@ export class ServersRepo {
           (id, name, subdomain, description, max_players, game_port, rcon_port,
            rcon_password, save_name, generate_new_save, factorio_username,
            factorio_token, factorio_tag, container_id, status, game_mode,
+           map_gen_settings_json, map_settings_json,
+           lifecycle, expires_at, draft_state_json,
            auto_restart, auto_backup, backup_interval_minutes, backup_keep, backup_keep_manual,
            auto_restart_overridden, auto_backup_overridden, backup_interval_minutes_overridden,
            backup_keep_overridden, backup_keep_manual_overridden)
@@ -21,6 +23,8 @@ export class ServersRepo {
           (@id, @name, @subdomain, @description, @max_players, @game_port, @rcon_port,
            @rcon_password, @save_name, @generate_new_save, @factorio_username,
            @factorio_token, @factorio_tag, @container_id, @status, @game_mode,
+           @map_gen_settings_json, @map_settings_json,
+           @lifecycle, @expires_at, @draft_state_json,
            @auto_restart, @auto_backup, @backup_interval_minutes, @backup_keep, @backup_keep_manual,
            @auto_restart_overridden, @auto_backup_overridden, @backup_interval_minutes_overridden,
            @backup_keep_overridden, @backup_keep_manual_overridden)`,
@@ -33,14 +37,68 @@ export class ServersRepo {
     return this.db.prepare<ServerRow>('SELECT * FROM servers WHERE id = ?').get(id);
   }
 
+  /** Subdomain lookup for uniqueness — active servers only (drafts hold placeholders). */
   getBySubdomain(subdomain: string): ServerRow | undefined {
     return this.db
-      .prepare<ServerRow>('SELECT * FROM servers WHERE subdomain = ?')
+      .prepare<ServerRow>("SELECT * FROM servers WHERE subdomain = ? AND lifecycle = 'active'")
       .get(subdomain);
   }
 
+  /** Real (active) servers only — the single choke-point that keeps drafts out of
+   *  every operational path (listing, ports, DNS, resume-on-boot, backups). */
   list(): ServerRow[] {
-    return this.db.prepare<ServerRow>('SELECT * FROM servers ORDER BY created_at ASC').all();
+    return this.db
+      .prepare<ServerRow>("SELECT * FROM servers WHERE lifecycle = 'active' ORDER BY created_at ASC")
+      .all();
+  }
+
+  /** In-progress wizard drafts, newest activity first (for "Continue new server"). */
+  listDrafts(): ServerRow[] {
+    return this.db
+      .prepare<ServerRow>("SELECT * FROM servers WHERE lifecycle = 'draft' ORDER BY updated_at DESC")
+      .all();
+  }
+
+  /** Persist wizard state + bump the prune deadline (called as the user progresses). */
+  setDraftState(id: string, json: string, expiresAt: string): void {
+    this.db
+      .prepare(
+        "UPDATE servers SET draft_state_json = ?, expires_at = ?, updated_at = datetime('now') " +
+          "WHERE id = ? AND lifecycle = 'draft'",
+      )
+      .run(json, expiresAt, id);
+  }
+
+  /** Promote a draft to a real server: claim its subdomain + ports, clear draft state. */
+  promoteToActive(id: string, subdomain: string, gamePort: number, rconPort: number): void {
+    this.db
+      .prepare(
+        "UPDATE servers SET lifecycle = 'active', subdomain = ?, game_port = ?, rcon_port = ?, " +
+          "expires_at = NULL, draft_state_json = NULL, updated_at = datetime('now') " +
+          "WHERE id = ? AND lifecycle = 'draft'",
+      )
+      .run(subdomain, gamePort, rconPort, id);
+  }
+
+  /** Revert a promotion (finalize rolled back, e.g. DNS failed): back to draft, no ports. */
+  demoteToDraft(id: string, expiresAt: string): void {
+    this.db
+      .prepare(
+        "UPDATE servers SET lifecycle = 'draft', game_port = 0, rcon_port = 0, expires_at = ?, " +
+          "updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(expiresAt, id);
+  }
+
+  /** Delete drafts whose deadline has passed; returns their ids so dirs can be cleaned. */
+  deleteExpiredDrafts(nowIso: string): string[] {
+    const rows = this.db
+      .prepare<{ id: string }>(
+        "SELECT id FROM servers WHERE lifecycle = 'draft' AND expires_at IS NOT NULL AND expires_at < ?",
+      )
+      .all(nowIso);
+    for (const { id } of rows) this.db.prepare('DELETE FROM servers WHERE id = ?').run(id);
+    return rows.map((r) => r.id);
   }
 
   setStatus(id: string, status: string, containerId?: string | null): void {

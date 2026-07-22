@@ -1,7 +1,7 @@
 import { randomUUID, randomBytes } from 'node:crypto';
 import type { AppConfig } from '../config.js';
 import { kvGet, kvSet, type DB } from '../db/index.js';
-import type { ServerRow } from '../db/models.js';
+import type { ServerRow, DraftState } from '../db/models.js';
 import { ServersRepo } from '../db/serversRepo.js';
 import { PortAllocator } from './portAllocator.js';
 import { DockerService } from './dockerService.js';
@@ -180,6 +180,9 @@ export class ServerManager {
         input.mapGen && Object.keys(input.mapGen).length > 0 ? JSON.stringify(input.mapGen) : null,
       map_settings_json: null,
       game_mode: cleanGameMode(input.gameMode),
+      lifecycle: 'active',
+      expires_at: null,
+      draft_state_json: null,
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
@@ -216,6 +219,202 @@ export class ServerManager {
     }
 
     return row;
+  }
+
+  // ---- Draft lifecycle (new-server wizard) ----
+
+  /** How long an untouched draft survives before the prune job removes it. */
+  private static readonly DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+  private draftExpiry(): string {
+    return new Date(Date.now() + ServerManager.DRAFT_TTL_MS).toISOString();
+  }
+
+  /**
+   * Create a wizard draft — a persisted but inactive server row (no ports, no DNS)
+   * that the new-server wizard fills in and later finalizes. Survives restarts, is
+   * hidden from every operational listing, and is pruned once its TTL passes. The
+   * intended subdomain lives in draft state (the row's `subdomain` column holds an
+   * unusable placeholder) so two drafts can target the same name; uniqueness is only
+   * enforced at finalize.
+   */
+  async createDraft(
+    input: { source: DraftState['source'] } & Partial<CreateServerInput>,
+  ): Promise<ServerRow> {
+    const id = randomUUID().slice(0, 8);
+    const g = getGlobalDefaults(this.db);
+    const gameMode = cleanGameMode(input.gameMode);
+    const state: DraftState = {
+      source: input.source,
+      name: input.name?.trim() || undefined,
+      subdomain: input.subdomain?.trim() || undefined,
+      maxPlayers: input.maxPlayers,
+      description: input.description?.trim() || undefined,
+      factorioTag: input.factorioTag,
+      gameMode,
+      mapGen: input.mapGen,
+      mods: input.mods,
+    };
+    const row: ServerRow = {
+      id,
+      name: input.name?.trim() ?? '',
+      // Placeholder: invalid as a real subdomain (underscores), so it can never
+      // collide with an active server's; the intended subdomain lives in draft state.
+      subdomain: `__draft_${id}`,
+      description: input.description?.trim() ?? '',
+      max_players: input.maxPlayers ?? 0,
+      game_port: 0,
+      rcon_port: 0,
+      rcon_password: randomBytes(18).toString('base64url'),
+      save_name: input.saveName?.trim() || 'default',
+      // The save flow adopts an uploaded save; the others generate a new map.
+      generate_new_save: input.source === 'save' ? 0 : 1,
+      factorio_username: '',
+      factorio_token: '',
+      container_id: null,
+      status: 'stopped',
+      created_at: '',
+      updated_at: '',
+      settings_json: null,
+      applied_modpack_id: null,
+      whitelist_json: null,
+      factorio_tag: this.cleanTag(input.factorioTag),
+      auto_restart: g.autoRestart ? 1 : 0,
+      adminlist_json: null,
+      desired_state: 'stopped',
+      auto_backup: g.autoBackup ? 1 : 0,
+      backup_interval_minutes: g.backupIntervalMinutes,
+      backup_keep: g.backupKeep,
+      backup_keep_manual: g.backupKeepManual,
+      auto_restart_overridden: 0,
+      auto_backup_overridden: 0,
+      backup_interval_minutes_overridden: 0,
+      backup_keep_overridden: 0,
+      backup_keep_manual_overridden: 0,
+      map_gen_settings_json:
+        input.mapGen && Object.keys(input.mapGen).length > 0 ? JSON.stringify(input.mapGen) : null,
+      map_settings_json: null,
+      game_mode: gameMode,
+      lifecycle: 'draft',
+      expires_at: this.draftExpiry(),
+      draft_state_json: JSON.stringify(state),
+    };
+    this.repo.insert(row);
+    // Filesystem is best-effort/idempotent; a draft with no dir is still resumable.
+    try {
+      serverFiles.ensureDirs(id);
+      serverFiles.writeServerSettings(row, getGlobalAdvancedSettings(this.db));
+      if (input.mods && input.mods.length > 0) serverFiles.writeModList(id, input.mods);
+    } catch (err) {
+      console.warn(`[draft] file init failed for ${id}: ${(err as Error).message}`);
+    }
+    return this.repo.getById(id)!;
+  }
+
+  /** A single draft (must be lifecycle=draft). */
+  getDraft(id: string): ServerRow {
+    const row = this.repo.getById(id);
+    if (!row || row.lifecycle !== 'draft') throw new NotFoundError('Draft');
+    return row;
+  }
+
+  listDrafts(): ServerRow[] {
+    return this.repo.listDrafts();
+  }
+
+  /**
+   * Merge wizard progress into a draft: persist the resume state, refresh the prune
+   * deadline, and mirror the fields that live on real columns (so finalize/start use
+   * them). Returns the updated draft row.
+   */
+  async updateDraft(id: string, patch: Partial<DraftState>): Promise<ServerRow> {
+    const row = this.getDraft(id);
+    const prev: DraftState = row.draft_state_json
+      ? (JSON.parse(row.draft_state_json) as DraftState)
+      : { source: 'generate' };
+    const next: DraftState = { ...prev, ...patch };
+
+    const cols: Record<string, string | number> = {};
+    if (patch.name !== undefined) cols.name = patch.name.trim();
+    if (patch.description !== undefined) cols.description = patch.description.trim();
+    if (patch.maxPlayers !== undefined) cols.max_players = patch.maxPlayers;
+    if (patch.factorioTag !== undefined) cols.factorio_tag = this.cleanTag(patch.factorioTag);
+    if (patch.gameMode !== undefined) cols.game_mode = cleanGameMode(patch.gameMode);
+    if (Object.keys(cols).length > 0) this.repo.update(id, cols as never);
+    if (patch.mapGen !== undefined) this.repo.setMapGenSettingsJson(id, JSON.stringify(patch.mapGen));
+    if (patch.mapSettings !== undefined)
+      this.repo.setMapSettingsJson(id, patch.mapSettings ? JSON.stringify(patch.mapSettings) : null);
+    if (patch.mods !== undefined) {
+      try {
+        serverFiles.ensureDirs(id);
+        serverFiles.writeModList(id, patch.mods);
+      } catch (err) {
+        console.warn(`[draft] mod-list write failed for ${id}: ${(err as Error).message}`);
+      }
+    }
+    this.repo.setDraftState(id, JSON.stringify(next), this.draftExpiry());
+    return this.repo.getById(id)!;
+  }
+
+  /** Discard a draft (row + dir). No-op-safe on unknown ids. */
+  discardDraft(id: string): void {
+    const row = this.repo.getById(id);
+    if (!row || row.lifecycle !== 'draft') return;
+    this.repo.delete(id);
+    serverFiles.removeAll(id);
+  }
+
+  /**
+   * Finalize a draft into a real server: validate + claim its subdomain, allocate
+   * ports, flip it active, and create its DNS record. (The pre-flight boot probe is
+   * layered on in a later slice; "create without testing" calls this directly.)
+   */
+  async finalize(id: string): Promise<ServerRow> {
+    const draft = this.getDraft(id);
+    const state: DraftState = draft.draft_state_json
+      ? (JSON.parse(draft.draft_state_json) as DraftState)
+      : { source: 'generate' };
+    const subdomain = (state.subdomain ?? '').trim();
+    this.validateSubdomain(subdomain);
+    if (this.repo.getBySubdomain(subdomain)) throw new DuplicateSubdomainError(subdomain);
+
+    // Claim ports + flip active atomically.
+    this.db.transaction(() => {
+      const { gamePort, rconPort } = this.allocator.allocatePair(id);
+      this.repo.promoteToActive(id, subdomain, gamePort, rconPort);
+    })();
+    const row = this.repo.getById(id)!;
+
+    try {
+      serverFiles.ensureDirs(id);
+      serverFiles.writeServerSettings(row, getGlobalAdvancedSettings(this.db));
+    } catch (err) {
+      // Non-fatal: settings are rewritten on start too.
+      console.warn(`[finalize] settings write failed for ${id}: ${(err as Error).message}`);
+    }
+
+    // DNS side effect. On failure, roll back to a draft so nothing half-created leaks.
+    try {
+      await this.dns.createServerSrv(row);
+    } catch (err) {
+      this.allocator.releaseServerPorts(id);
+      this.repo.demoteToDraft(id, this.draftExpiry());
+      throw err;
+    }
+    return row;
+  }
+
+  /** Delete drafts past their TTL (row + on-disk dir). Runs on an interval. */
+  pruneDrafts(): number {
+    const ids = this.repo.deleteExpiredDrafts(new Date().toISOString());
+    for (const id of ids) {
+      try {
+        serverFiles.removeAll(id);
+      } catch (err) {
+        console.warn(`[draft] dir cleanup failed for ${id}: ${(err as Error).message}`);
+      }
+    }
+    if (ids.length > 0) console.log(`[draft] pruned ${ids.length} expired draft(s)`);
+    return ids.length;
   }
 
   async update(id: string, input: UpdateServerInput): Promise<ServerRow> {

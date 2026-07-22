@@ -50,6 +50,74 @@ export interface ServerRow {
   map_settings_json: string | null;
   /** 'vanilla' | 'space_age' | 'modded'. Migration v13. */
   game_mode: string;
+  /** 'draft' (wizard in progress) | 'active' (real server). Migration v14. */
+  lifecycle: string;
+  /** ISO time a draft is pruned at; null for active servers. Migration v14. */
+  expires_at: string | null;
+  /** Wizard resume state (see DraftState) as JSON; null for active. Migration v14. */
+  draft_state_json: string | null;
+}
+
+/**
+ * A new-server wizard's in-progress state, persisted on the draft row so the flow
+ * survives restarts and is resumable ("Continue new server"). The intended subdomain
+ * lives here rather than on the row's `subdomain` column (which holds a placeholder to
+ * satisfy the NOT NULL/UNIQUE constraint) — real uniqueness is validated at finalize.
+ */
+export interface DraftState {
+  /** Which wizard flow this draft is in. */
+  source: 'generate' | 'import' | 'save';
+  /** Furthest wizard stage reached, so resume lands on the right step. */
+  step?: string;
+  /** Intended fields (mirrored onto the row where columns exist). */
+  name?: string;
+  subdomain?: string;
+  maxPlayers?: number;
+  description?: string;
+  factorioTag?: string;
+  gameMode?: string;
+  mapGen?: Record<string, unknown>;
+  mapSettings?: Record<string, unknown>;
+  mods?: { name: string; enabled: boolean }[];
+  /** Import flow: the pasted exchange string and the settings it decoded to. */
+  exchangeString?: string;
+  /** Save flow: a save file has been uploaded into the draft's dir. */
+  saveStaged?: boolean;
+  saveFileName?: string;
+}
+
+/** API-facing draft shape for the "Continue new server" list. */
+export interface DraftDto {
+  id: string;
+  source: string;
+  step: string | null;
+  name: string;
+  subdomain: string;
+  gameMode: string;
+  createdAt: string;
+  updatedAt: string;
+  /** ISO time this draft is pruned at (for an "expires in Nh" display). */
+  expiresAt: string | null;
+}
+
+export function toDraftDto(row: ServerRow): DraftDto {
+  let state: DraftState | null = null;
+  try {
+    state = row.draft_state_json ? (JSON.parse(row.draft_state_json) as DraftState) : null;
+  } catch {
+    state = null;
+  }
+  return {
+    id: row.id,
+    source: state?.source ?? 'generate',
+    step: state?.step ?? null,
+    name: (state?.name ?? row.name ?? '').trim(),
+    subdomain: (state?.subdomain ?? '').trim(),
+    gameMode: state?.gameMode ?? row.game_mode ?? 'space_age',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    expiresAt: row.expires_at,
+  };
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */

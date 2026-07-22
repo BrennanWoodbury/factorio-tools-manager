@@ -126,6 +126,21 @@ const MIGRATIONS: Migration[] = [
     // (which planets show) and the bundled Space Age mods' enablement on start.
     up: (db) => db.exec("ALTER TABLE servers ADD COLUMN game_mode TEXT NOT NULL DEFAULT 'space_age'"),
   },
+  {
+    version: 14,
+    // Draft lifecycle. A row is created up front while the new-server wizard is in
+    // progress (lifecycle='draft') and only becomes a real server on finalize
+    // (lifecycle='active'). Drafts hold no ports and no DNS, are excluded from every
+    // operational listing, survive restarts (so the wizard is resumable), and are
+    // pruned once `expires_at` passes. `draft_state_json` stores the wizard's
+    // in-progress state (intended subdomain, mode, mapgen, mods, …) for resume.
+    // Existing rows are real servers => 'active'.
+    up: (db) => {
+      db.exec("ALTER TABLE servers ADD COLUMN lifecycle TEXT NOT NULL DEFAULT 'active'");
+      db.exec('ALTER TABLE servers ADD COLUMN expires_at TEXT');
+      db.exec('ALTER TABLE servers ADD COLUMN draft_state_json TEXT');
+    },
+  },
 ];
 
 export function runMigrations(db: DB): void {
