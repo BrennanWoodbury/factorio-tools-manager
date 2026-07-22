@@ -50,11 +50,29 @@ export interface UpdateServerInput {
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-const GAME_MODES = ['vanilla', 'space_age', 'modded'] as const;
-/** The bundled Space Age mods, toggled on/off by game mode. */
-const SPACE_AGE_MODS = ['space-age', 'quality', 'elevated-rails'];
+const GAME_MODES = ['vanilla', 'space_age', 'space_age_no_quality', 'modded'] as const;
 const cleanGameMode = (m: string | undefined): string =>
   (GAME_MODES as readonly string[]).includes(m ?? '') ? (m as string) : 'space_age';
+
+/**
+ * Which of the bundled Space Age mods a mode forces enabled/disabled (applied to
+ * mod-list.json on start, other mods preserved). `null` = don't touch (Modded — the
+ * modpack manages mods). Space Age runs fine without `quality` (verified: it just
+ * sets FeatureFlag quality=false).
+ */
+function spaceAgeModEnablement(mode: string): Record<string, boolean> | null {
+  switch (mode) {
+    case 'vanilla':
+      return { 'space-age': false, quality: false, 'elevated-rails': false };
+    case 'space_age_no_quality':
+      return { 'space-age': true, quality: false, 'elevated-rails': true };
+    case 'modded':
+      return null;
+    case 'space_age':
+    default:
+      return { 'space-age': true, quality: true, 'elevated-rails': true };
+  }
+}
 // Valid Docker image tag (also allow empty to mean "use the global default").
 const TAG_RE = /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}$/;
 
@@ -468,16 +486,18 @@ export class ServerManager {
     // Recreate the container each start so it always reflects current config
     // (env vars, ports). Data lives in the bind mount, so this is cheap.
     serverFiles.writeServerSettings(row);
-    // Enforce the game mode's Space Age enablement in the mod list (bundled SA mods
-    // on for space_age/modded, off for vanilla), preserving any other mods.
-    const modList = serverFiles.readModList(id);
-    const saEnabled = row.game_mode !== 'vanilla';
-    for (const name of SPACE_AGE_MODS) {
-      const e = modList.find((m) => m.name === name);
-      if (e) e.enabled = saEnabled;
-      else modList.push({ name, enabled: saEnabled });
+    // Enforce the game mode's Space Age enablement in the mod list, preserving any
+    // other mods. Modded (null) leaves the mod list to the applied modpack.
+    const enablement = spaceAgeModEnablement(row.game_mode);
+    if (enablement) {
+      const modList = serverFiles.readModList(id);
+      for (const [name, enabled] of Object.entries(enablement)) {
+        const e = modList.find((m) => m.name === name);
+        if (e) e.enabled = enabled;
+        else modList.push({ name, enabled });
+      }
+      serverFiles.writeModList(id, modList);
     }
-    serverFiles.writeModList(id, modList);
     // Custom map-gen settings (if any) written to config/ so the image's `--create`
     // (GENERATE_NEW_SAVE=true, or first start with no saves) honours them; also heals
     // any stale incomplete map-settings.json left by an earlier build.

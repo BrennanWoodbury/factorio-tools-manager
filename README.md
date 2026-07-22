@@ -154,11 +154,12 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   alter an existing world. `map-settings.json` (pollution/evolution/expansion) is left to the image's
   version-matched example — Factorio validates it strictly against the exact binary version, so a
   hand-written one isn't safe.
-- **Game modes:** each server is **Vanilla**, **Space Age**, or **Modded** (chosen in the create
-  wizard, editable on the Map gen tab). The mode drives which map-gen sliders show — Vanilla is
-  Nauvis-only; **Space Age** shows curated **per-planet** resource sliders (Nauvis, Vulcanus, Gleba,
-  Fulgora, Aquilo) — and toggles the bundled Space Age mods on/off (on next start). Modded leans on
-  a modpack + exchange-string import for its resources.
+- **Game modes:** each server is **Vanilla**, **Space Age**, **Space Age — without Quality**, or
+  **Modded** (chosen in the create wizard, editable on the Map gen tab). The mode drives which
+  map-gen sliders show — Vanilla is Nauvis-only; the Space Age modes show curated **per-planet**
+  resource sliders (Nauvis, Vulcanus, Gleba, Fulgora, Aquilo) — and sets which bundled Space Age
+  mods are enabled on next start (Vanilla disables all; "without Quality" keeps space-age +
+  elevated-rails but disables the quality mod). Modded leans on a modpack + exchange-string import.
 - **Map preview:** on the Map gen tab, a **Preview map** button renders a PNG of your current
   (unsaved) settings via a throwaway Factorio one-shot (`--generate-map-preview`, using the server's
   mods) — click the thumbnail to expand it full-res, or reroll the seed.
