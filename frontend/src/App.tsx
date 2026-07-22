@@ -8,6 +8,7 @@ import { ModpackDetail } from './components/ModpackDetail';
 import { MapGenTemplatesView } from './components/MapGenTemplatesView';
 import { SettingsView } from './components/SettingsView';
 import { NotificationsCenter } from './components/NotificationsCenter';
+import { BrandMark } from './components/BrandMark';
 import { Toaster } from './ui';
 
 type Tab = 'servers' | 'modpacks' | 'templates' | 'settings';
@@ -54,7 +55,7 @@ export function App() {
     <>
       <header className="app-header">
         <div className="brand" style={{ cursor: 'pointer' }} onClick={() => go('servers')}>
-          <span style={{ fontSize: 22 }}>🏭</span>
+          <BrandMark size={26} />
           <h1>Factorio Server Manager</h1>
         </div>
         <div className="row" style={{ alignItems: 'center' }}>
