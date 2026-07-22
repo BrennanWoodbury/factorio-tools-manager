@@ -9,7 +9,13 @@ import { DnsService } from './dnsService.js';
 import { RconService } from './rconService.js';
 import { serverFiles, sanitizeName, type ModEntry } from './serverFiles.js';
 import { getFactorioAccount } from './factorioAccount.js';
-import { CASCADE, getGlobalDefaults, resetServerSetting, type CascadeDef } from './globalDefaults.js';
+import {
+  CASCADE,
+  getGlobalDefaults,
+  getGlobalAdvancedSettings,
+  resetServerSetting,
+  type CascadeDef,
+} from './globalDefaults.js';
 import { DockerError, DuplicateSubdomainError, NotFoundError, ValidationError } from '../lib/errors.js';
 
 /** Extract the payload our decode/encode scenarios log between FTM_BEGIN…FTM_END. */
@@ -191,7 +197,7 @@ export class ServerManager {
     // Phase 2: filesystem (idempotent, safe to leave behind if later steps fail).
     try {
       serverFiles.ensureDirs(id);
-      serverFiles.writeServerSettings(row);
+      serverFiles.writeServerSettings(row, getGlobalAdvancedSettings(this.db));
       if (input.mods && input.mods.length > 0) {
         serverFiles.writeModList(id, input.mods);
       }
@@ -321,23 +327,37 @@ export class ServerManager {
     return true;
   }
 
-  /** The effective advanced server-settings (defaults filled, managed keys stripped). */
-  getSettings(id: string): Record<string, unknown> {
-    return serverFiles.getAdvancedSettings(this.get(id));
+  /**
+   * The effective advanced server-settings (hard-coded ⊕ global defaults ⊕ this
+   * server's sparse overrides), plus which keys are overridden and the global
+   * default values (so the UI can show inherit/override + "reset to global: X").
+   */
+  getSettings(id: string): {
+    settings: Record<string, unknown>;
+    overridden: string[];
+    globalDefaults: Record<string, unknown>;
+  } {
+    const row = this.get(id);
+    const globalDefaults = getGlobalAdvancedSettings(this.db);
+    return {
+      settings: serverFiles.getAdvancedSettings(row, globalDefaults),
+      overridden: Object.keys(serverFiles.getServerOverrides(row)),
+      globalDefaults,
+    };
   }
 
   /**
-   * Replace a server's advanced server-settings. Managed keys (name/description/
-   * max_players) are stripped — those are edited via the basic form/update() — so
-   * there's no drift between the two. Applies to the game on next start.
+   * Replace a server's advanced-settings SPARSE overrides — only the keys it
+   * overrides (managed keys stripped). Everything else inherits the global default.
+   * Applies to the game on next start.
    */
-  async updateSettings(id: string, advanced: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async updateSettings(id: string, overrides: Record<string, unknown>) {
     this.get(id); // 404 if unknown
-    const clean = { ...advanced };
+    const clean = { ...overrides };
     for (const k of ['name', 'description', 'max_players']) delete clean[k];
     this.repo.setSettingsJson(id, JSON.stringify(clean));
     await this.maybeAutoRestart(id, true);
-    return serverFiles.getAdvancedSettings(this.get(id));
+    return this.getSettings(id);
   }
 
   // ---- Map generation (new-save settings) ----
@@ -485,7 +505,7 @@ export class ServerManager {
     await this.docker.ensureNetwork();
     // Recreate the container each start so it always reflects current config
     // (env vars, ports). Data lives in the bind mount, so this is cheap.
-    serverFiles.writeServerSettings(row);
+    serverFiles.writeServerSettings(row, getGlobalAdvancedSettings(this.db));
     // Enforce the game mode's Space Age enablement in the mod list, preserving any
     // other mods. Modded (null) leaves the mod list to the applied modpack.
     const enablement = spaceAgeModEnablement(row.game_mode);

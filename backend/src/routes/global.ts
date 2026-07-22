@@ -5,7 +5,13 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 import { ValidationError } from '../lib/errors.js';
 import { dnsSettingsDto, getDnsSettings, setDnsSettings } from '../services/dnsSettings.js';
 import { factorioAccountDto, getFactorioAccount, setFactorioAccount } from '../services/factorioAccount.js';
-import { getGlobalDefaults, globalDefaultsDto, setGlobalDefaults } from '../services/globalDefaults.js';
+import {
+  getGlobalDefaults,
+  globalDefaultsDto,
+  setGlobalDefaults,
+  getGlobalAdvancedSettings,
+  setGlobalAdvancedSettings,
+} from '../services/globalDefaults.js';
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const r = schema.safeParse(body);
@@ -69,6 +75,20 @@ export function globalRouter(ctx: AppContext): Router {
   };
 
   r.get('/defaults', asyncHandler(async (_req, res) => res.json({ defaults: defaultsDto() })));
+
+  // Global advanced server-settings defaults (server-settings.json fields).
+  r.get(
+    '/advanced-settings',
+    asyncHandler(async (_req, res) => res.json({ settings: getGlobalAdvancedSettings(ctx.db) })),
+  );
+  r.put(
+    '/advanced-settings',
+    asyncHandler(async (req, res) => {
+      const body = parse(z.object({ settings: z.record(z.string(), z.unknown()) }), req.body);
+      setGlobalAdvancedSettings(ctx.db, body.settings);
+      res.json({ settings: getGlobalAdvancedSettings(ctx.db) });
+    }),
+  );
 
   r.put(
     '/defaults',

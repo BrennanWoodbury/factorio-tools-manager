@@ -18,6 +18,12 @@ import type {
   SystemStatus,
 } from './types';
 
+export interface AdvancedSettingsResult {
+  settings: Record<string, unknown>;
+  overridden: string[];
+  globalDefaults: Record<string, unknown>;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -62,9 +68,13 @@ export const api = {
     req<{ server: Server }>('PATCH', `/servers/${id}`, input),
   deleteServer: (id: string) => req<void>('DELETE', `/servers/${id}`),
   getSettings: (id: string) =>
-    req<{ settings: Record<string, unknown> }>('GET', `/servers/${id}/settings`),
+    req<AdvancedSettingsResult>('GET', `/servers/${id}/settings`),
   updateSettings: (id: string, settings: Record<string, unknown>) =>
-    req<{ settings: Record<string, unknown> }>('PUT', `/servers/${id}/settings`, { settings }),
+    req<AdvancedSettingsResult>('PUT', `/servers/${id}/settings`, { settings }),
+  getGlobalAdvancedSettings: () =>
+    req<{ settings: Record<string, unknown> }>('GET', '/global/advanced-settings'),
+  setGlobalAdvancedSettings: (settings: Record<string, unknown>) =>
+    req<{ settings: Record<string, unknown> }>('PUT', '/global/advanced-settings', { settings }),
 
   start: (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/start`),
   stop: (id: string) => req<{ ok: boolean }>('POST', `/servers/${id}/stop`),

@@ -1,5 +1,28 @@
 import { kvGet, kvSet, type DB } from '../db/index.js';
 import { ValidationError } from '../lib/errors.js';
+import { serverFiles, deepMerge } from './serverFiles.js';
+
+const MANAGED_KEYS = ['name', 'description', 'max_players'];
+const KV_ADVANCED = 'default_advanced_settings_json';
+
+/** Global advanced server-settings defaults = hard-coded defaults ⊕ admin overrides. */
+export function getGlobalAdvancedSettings(db: DB): Record<string, unknown> {
+  const hardcoded = serverFiles.defaultAdvancedSettings();
+  const raw = kvGet(db, KV_ADVANCED);
+  if (!raw) return hardcoded;
+  try {
+    return deepMerge(hardcoded, JSON.parse(raw) as Record<string, unknown>);
+  } catch {
+    return hardcoded;
+  }
+}
+
+/** Replace the admin's global advanced-settings overrides (managed keys stripped). */
+export function setGlobalAdvancedSettings(db: DB, settings: Record<string, unknown>): void {
+  const clean = { ...settings };
+  for (const k of MANAGED_KEYS) delete clean[k];
+  kvSet(db, KV_ADVANCED, JSON.stringify(clean));
+}
 
 /**
  * Global server defaults with per-server override. Each scalar "cascading" setting

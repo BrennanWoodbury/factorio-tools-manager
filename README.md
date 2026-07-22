@@ -176,7 +176,10 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   a couple ("Rich resources", "Peaceful") are seeded by default. "Save as template" is available
   from any map-gen editor.
 - **Server settings:** edit the full `server-settings.json` (visibility, game password, autosave,
-  `allow_commands`, AFK kick, pause rules, …) via a structured form plus a raw-JSON escape hatch.
+  `allow_commands`, AFK kick, pause rules, non-blocking saving, …) via a structured form plus a
+  raw-JSON escape hatch. Each field **inherits the global default** (set on the **Defaults** tab)
+  until you change it; a changed field shows a **reset-to-global** button, and only the overridden
+  fields are stored — so untouched fields keep tracking the global default.
 - **Auto-restart on change:** an optional per-server toggle — when on, saving a change that only
   takes effect at start (version/tag, server settings, mods, whitelist) automatically restarts the
   server in the background if it's running (only when a value actually changed); otherwise changes

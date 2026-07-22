@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import type { GlobalDefaults, MapGenTemplate, Modpack } from '../types';
 import { run, toastError } from '../ui';
+import { GlobalAdvancedSettings } from './GlobalAdvancedSettings';
 
 /**
  * Global server defaults. The scalar settings (auto-restart + backup config) cascade:
@@ -159,6 +160,8 @@ export function DefaultsView() {
           ))}
         </select>
       </div>
+
+      <GlobalAdvancedSettings />
     </>
   );
 }

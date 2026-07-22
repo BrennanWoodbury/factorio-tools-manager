@@ -96,8 +96,8 @@ export class ServerFilesService {
     };
   }
 
-  /** Stored advanced settings for a server (defaults filled), managed keys removed. */
-  getAdvancedSettings(server: ServerRow): Record<string, unknown> {
+  /** A server's SPARSE advanced-settings overrides (only the keys it overrode). */
+  getServerOverrides(server: ServerRow): Record<string, unknown> {
     let stored: Record<string, unknown> = {};
     if (server.settings_json) {
       try {
@@ -106,15 +106,26 @@ export class ServerFilesService {
         stored = {};
       }
     }
-    const merged = { ...this.defaultAdvancedSettings(), ...stored };
+    const clean = { ...stored };
+    for (const k of ServerFilesService.MANAGED_KEYS) delete clean[k];
+    return clean;
+  }
+
+  /**
+   * Effective advanced settings for a server: `base` (the global defaults, itself
+   * hard-coded ⊕ the admin's global overrides) with this server's sparse overrides
+   * merged on. Falls back to the hard-coded defaults when no base is given.
+   */
+  getAdvancedSettings(server: ServerRow, base?: Record<string, unknown>): Record<string, unknown> {
+    const merged = deepMerge(base ?? this.defaultAdvancedSettings(), this.getServerOverrides(server));
     for (const k of ServerFilesService.MANAGED_KEYS) delete merged[k];
     return merged;
   }
 
   /** The effective server-settings.json body: advanced ⊕ managed row fields. */
-  effectiveSettings(server: ServerRow): Record<string, unknown> {
+  effectiveSettings(server: ServerRow, base?: Record<string, unknown>): Record<string, unknown> {
     return {
-      ...this.getAdvancedSettings(server),
+      ...this.getAdvancedSettings(server, base),
       name: server.name,
       description: server.description,
       max_players: server.max_players,
@@ -122,11 +133,11 @@ export class ServerFilesService {
   }
 
   /** Write server-settings.json from the server row. Called before each start. */
-  writeServerSettings(server: ServerRow): void {
+  writeServerSettings(server: ServerRow, base?: Record<string, unknown>): void {
     this.ensureDirs(server.id);
     fs.writeFileSync(
       path.join(this.configDir(server.id), 'server-settings.json'),
-      JSON.stringify(this.effectiveSettings(server), null, 2),
+      JSON.stringify(this.effectiveSettings(server, base), null, 2),
     );
   }
 
@@ -578,7 +589,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
  * mutated. Lets stored settings override defaults while any keys the user never
  * touched (e.g. added in a later game version) fall back to the default.
  */
-function deepMerge(
+export function deepMerge(
   base: Record<string, unknown>,
   override: Record<string, unknown>,
 ): Record<string, unknown> {

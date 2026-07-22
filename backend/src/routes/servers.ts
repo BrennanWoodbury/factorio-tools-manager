@@ -175,7 +175,7 @@ export function serversRouter(ctx: AppContext): Router {
   r.get(
     '/:id/settings',
     asyncHandler(async (req, res) => {
-      res.json({ settings: manager.getSettings(req.params.id) });
+      res.json(manager.getSettings(req.params.id));
     }),
   );
 
@@ -183,8 +183,7 @@ export function serversRouter(ctx: AppContext): Router {
     '/:id/settings',
     asyncHandler(async (req, res) => {
       const body = parse(z.object({ settings: z.record(z.string(), z.unknown()) }), req.body);
-      const settings = await manager.updateSettings(req.params.id, body.settings);
-      res.json({ settings });
+      res.json(await manager.updateSettings(req.params.id, body.settings));
     }),
   );
 
