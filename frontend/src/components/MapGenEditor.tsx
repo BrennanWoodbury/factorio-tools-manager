@@ -36,6 +36,7 @@ function Slider({
   max = 6,
   step = 0.05,
   showLevel = true,
+  disabled = false,
 }: {
   label: string;
   value: number;
@@ -44,9 +45,10 @@ function Slider({
   max?: number;
   step?: number;
   showLevel?: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div style={{ marginBottom: 10, opacity: disabled ? 0.45 : 1 }}>
       <div className="spread" style={{ marginBottom: 2 }}>
         <span className="small">{label}</span>
         <span className="small muted mono">
@@ -60,6 +62,7 @@ function Slider({
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         style={{ width: '100%' }}
       />
@@ -118,6 +121,8 @@ export function MapGenEditor({
   showTemplates?: boolean;
 }) {
   const [templates, setTemplates] = useState<MapGenTemplate[]>([]);
+  // "Link all resources": drive every ore's freq/size/richness from one master set.
+  const [bulk, setBulk] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     if (!showTemplates) return;
@@ -141,6 +146,26 @@ export function MapGenEditor({
     g(['autoplace_controls', key, field]);
   const setControl = (key: string, field: 'frequency' | 'size' | 'richness', v: number) =>
     sg(['autoplace_controls', key, field], v);
+
+  // ---- master "link all resources" controls ----
+  type Field = 'frequency' | 'size' | 'richness';
+  // Set one field to `v` across every ore in a single update.
+  const setAllResources = (field: Field, v: number) => {
+    let next = value;
+    for (const r of RESOURCES) next = setPath(next, ['autoplace_controls', r.key, field], v);
+    onChange(next);
+  };
+  const toggleBulk = (on: boolean) => {
+    setBulk(on);
+    if (!on) return;
+    // Snap every ore to the first ore's values so the master reflects them all.
+    let next = value;
+    for (const field of ['frequency', 'size', 'richness'] as Field[]) {
+      const v = control(RESOURCES[0].key, field);
+      for (const r of RESOURCES) next = setPath(next, ['autoplace_controls', r.key, field], v);
+    }
+    onChange(next);
+  };
 
   const cliffInterval = g(['cliff_settings', 'cliff_elevation_interval'], 40);
   const cliffFreq = cliffInterval > 0 ? 40 / cliffInterval : 0;
@@ -201,17 +226,56 @@ export function MapGenEditor({
       <div className="small muted" style={{ marginBottom: 12 }}>
         Frequency = how often patches occur · Size = patch size · Richness = yield per tile.
       </div>
+
+      {/* Master control: when checked, every ore inherits these values. */}
+      <Group title="All resources">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: bulk ? 12 : 0 }}>
+          <input
+            type="checkbox"
+            style={{ width: 'auto' }}
+            checked={bulk}
+            onChange={(e) => toggleBulk(e.target.checked)}
+          />
+          Set values for every resource at once
+        </label>
+        <Slider
+          label="Frequency"
+          disabled={!bulk}
+          value={control(RESOURCES[0].key, 'frequency')}
+          onChange={(v) => setAllResources('frequency', v)}
+        />
+        <Slider
+          label="Size"
+          disabled={!bulk}
+          value={control(RESOURCES[0].key, 'size')}
+          onChange={(v) => setAllResources('size', v)}
+        />
+        <Slider
+          label="Richness"
+          disabled={!bulk}
+          value={control(RESOURCES[0].key, 'richness')}
+          onChange={(v) => setAllResources('richness', v)}
+        />
+      </Group>
+
       {RESOURCES.map((r) => (
         <Group key={r.key} title={r.label}>
           <Slider
             label="Frequency"
+            disabled={bulk}
             value={control(r.key, 'frequency')}
             onChange={(v) => setControl(r.key, 'frequency', v)}
           />
-          <Slider label="Size" value={control(r.key, 'size')} onChange={(v) => setControl(r.key, 'size', v)} />
+          <Slider
+            label="Size"
+            disabled={bulk}
+            value={control(r.key, 'size')}
+            onChange={(v) => setControl(r.key, 'size', v)}
+          />
           {r.richness && (
             <Slider
               label="Richness"
+              disabled={bulk}
               value={control(r.key, 'richness')}
               onChange={(v) => setControl(r.key, 'richness', v)}
             />
