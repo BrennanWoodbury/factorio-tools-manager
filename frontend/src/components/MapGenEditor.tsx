@@ -67,6 +67,26 @@ function Slider({
   );
 }
 
+/** A titled, bordered, tinted box grouping one thing's sliders (e.g. one ore). */
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        border: '1px solid var(--border)',
+        background: 'var(--panel-2)',
+        borderRadius: 'var(--radius)',
+        padding: '12px 14px',
+        marginBottom: 12,
+      }}
+    >
+      <div className="mono" style={{ fontWeight: 600, marginBottom: 10 }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 const RESOURCES: { key: string; label: string; richness: boolean }[] = [
   { key: 'iron-ore', label: 'Iron ore', richness: true },
   { key: 'copper-ore', label: 'Copper ore', richness: true },
@@ -182,10 +202,7 @@ export function MapGenEditor({
         Frequency = how often patches occur · Size = patch size · Richness = yield per tile.
       </div>
       {RESOURCES.map((r) => (
-        <div key={r.key} style={{ marginBottom: 14 }}>
-          <div className="small mono" style={{ marginBottom: 4 }}>
-            {r.label}
-          </div>
+        <Group key={r.key} title={r.label}>
           <Slider
             label="Frequency"
             value={control(r.key, 'frequency')}
@@ -199,15 +216,12 @@ export function MapGenEditor({
               onChange={(v) => setControl(r.key, 'richness', v)}
             />
           )}
-        </div>
+        </Group>
       ))}
 
       <h3 style={{ marginBottom: 12 }}>Terrain &amp; enemies</h3>
       {TERRAIN.map((t) => (
-        <div key={t.key} style={{ marginBottom: 14 }}>
-          <div className="small mono" style={{ marginBottom: 4 }}>
-            {t.label}
-          </div>
+        <Group key={t.key} title={t.label}>
           <Slider
             label={t.key === 'water' ? 'Scale' : 'Frequency'}
             value={control(t.key, 'frequency')}
@@ -218,13 +232,10 @@ export function MapGenEditor({
             value={control(t.key, 'size')}
             onChange={(v) => setControl(t.key, 'size', v)}
           />
-        </div>
+        </Group>
       ))}
 
-      <div style={{ marginBottom: 14 }}>
-        <div className="small mono" style={{ marginBottom: 4 }}>
-          Cliffs
-        </div>
+      <Group title="Cliffs">
         <Slider label="Frequency" value={cliffFreq} onChange={setCliffFreq} />
         <Slider
           label="Continuity"
@@ -232,34 +243,34 @@ export function MapGenEditor({
           max={10}
           onChange={(v) => sg(['cliff_settings', 'richness'], v)}
         />
-      </div>
+      </Group>
 
-      <Slider
-        label="Starting area size"
-        value={g(['starting_area'])}
-        onChange={(v) => sg(['starting_area'], v)}
-      />
+      <Group title="Starting area">
+        <Slider label="Size" value={g(['starting_area'])} onChange={(v) => sg(['starting_area'], v)} />
+      </Group>
 
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+      <Group title="World options">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="checkbox"
+            style={{ width: 'auto' }}
+            checked={peaceful}
+            onChange={(e) => sg(['peaceful_mode'], e.target.checked)}
+          />
+          Peaceful mode (enemies don't attack unless provoked)
+        </label>
+
+        <label style={{ marginTop: 14 }}>Map seed (blank = random)</label>
         <input
-          type="checkbox"
-          style={{ width: 'auto' }}
-          checked={peaceful}
-          onChange={(e) => sg(['peaceful_mode'], e.target.checked)}
+          type="number"
+          value={seed}
+          placeholder="random"
+          onChange={(e) => {
+            const val = e.target.value.trim();
+            onChange(setPath(value, ['seed'], val === '' ? null : Number(val)));
+          }}
         />
-        Peaceful mode (enemies don't attack unless provoked)
-      </label>
-
-      <label style={{ marginTop: 14 }}>Map seed (blank = random)</label>
-      <input
-        type="number"
-        value={seed}
-        placeholder="random"
-        onChange={(e) => {
-          const val = e.target.value.trim();
-          onChange(setPath(value, ['seed'], val === '' ? null : Number(val)));
-        }}
-      />
+      </Group>
     </div>
   );
 }
