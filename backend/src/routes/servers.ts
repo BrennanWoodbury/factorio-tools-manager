@@ -229,6 +229,14 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  // Default map-gen for the server's mods (dynamic control set for Modded servers).
+  r.post(
+    '/:id/mapgen/baseline',
+    asyncHandler(async (req, res) => {
+      res.json(await manager.mapGenBaseline(req.params.id));
+    }),
+  );
+
   // Encode the given (or saved) settings into a shareable exchange string (on-demand).
   r.post(
     '/:id/mapgen/export',

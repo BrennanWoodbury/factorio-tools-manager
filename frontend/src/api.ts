@@ -112,6 +112,11 @@ export const api = {
     ),
   exportExchangeString: (id: string, mapGen?: Record<string, unknown>) =>
     req<{ exchangeString: string }>('POST', `/servers/${id}/mapgen/export`, { mapGen }),
+  mapGenBaseline: (id: string) =>
+    req<{ mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> }>(
+      'POST',
+      `/servers/${id}/mapgen/baseline`,
+    ),
   previewMap: async (
     id: string,
     body: { mapGen?: Record<string, unknown>; planet?: string; seed?: number; size?: number },

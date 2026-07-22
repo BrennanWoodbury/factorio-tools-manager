@@ -159,7 +159,9 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   map-gen sliders show — Vanilla is Nauvis-only; the Space Age modes show curated **per-planet**
   resource sliders (Nauvis, Vulcanus, Gleba, Fulgora, Aquilo) — and sets which bundled Space Age
   mods are enabled on next start (Vanilla disables all; "without Quality" keeps space-age +
-  elevated-rails but disables the quality mod). Modded leans on a modpack + exchange-string import.
+  elevated-rails but disables the quality mod). For **Modded** servers, a **Detect resources from
+  mods** button runs the mod set once (`get_map_exchange_string` → parsed to JSON) to populate
+  **dynamic sliders** for that modpack's actual resource controls.
 - **Map preview:** on the Map gen tab, a **Preview map** button renders a PNG of your current
   (unsaved) settings via a throwaway Factorio one-shot (`--generate-map-preview`, using the server's
   mods) — click the thumbnail to expand it full-res, or reroll the seed.

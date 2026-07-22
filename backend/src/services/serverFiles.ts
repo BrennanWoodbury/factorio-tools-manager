@@ -321,6 +321,26 @@ export class ServerFilesService {
     return this.writeScenarioServerSettings(serverId);
   }
 
+  /**
+   * Write a scenario that dumps the DEFAULT map-gen JSON for the server's loaded mods:
+   * `parse(get_map_exchange_string())` on a fresh world → the full control set (incl.
+   * mod resources) at defaults. Run with `--mod-directory /factorio/mods` so the
+   * server's downloaded mods load.
+   */
+  writeBaselineScenario(serverId: string): string {
+    const dir = path.join(this.localDir(serverId), 'scenarios', 'ftm-baseline');
+    fs.mkdirSync(dir, { recursive: true });
+    const lua =
+      'script.on_init(function()\n' +
+      '  local ok, s = pcall(function() return game.get_map_exchange_string() end)\n' +
+      '  if ok then log("FTM_BEGIN"..helpers.table_to_json(helpers.parse_map_exchange_string(s)).."FTM_END")\n' +
+      '  else log("FTM_ERR:"..tostring(s)) end\n' +
+      '  error("FTM_STOP")\n' +
+      'end)\n';
+    fs.writeFileSync(path.join(dir, 'control.lua'), lua);
+    return this.writeScenarioServerSettings(serverId);
+  }
+
   /** Write the map-gen settings to encode; returns the in-container path. */
   writeEncodeSettings(serverId: string, mapGen: Record<string, unknown>): string {
     const dir = this.importScratchDir(serverId);

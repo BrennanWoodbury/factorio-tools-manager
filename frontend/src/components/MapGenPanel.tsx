@@ -39,6 +39,19 @@ export function MapGenPanel({ server }: { server: Server }) {
     await run(() => api.updateServer(server.id, { gameMode: m }), 'Game mode saved (applies on next start)');
   };
 
+  const detectResources = async () => {
+    setBusy(true);
+    try {
+      const r = await api.mapGenBaseline(server.id);
+      setMapGen(r.mapGen);
+      toastSuccess('Detected — sliders populated from this server’s mods');
+    } catch (err) {
+      toastError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const save = async () => {
     setBusy(true);
     const ok = await run(
@@ -153,6 +166,16 @@ export function MapGenPanel({ server }: { server: Server }) {
 
       <div style={{ marginBottom: 12 }}>
         <GameModeSelect value={mode} onChange={(m) => void changeMode(m)} />
+        {mode === 'modded' && (
+          <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 10 }}>
+            <button disabled={busy} onClick={() => void detectResources()}>
+              {busy ? 'Detecting…' : 'Detect resources from mods'}
+            </button>
+            <span className="small muted">
+              Runs this server's mods once to load their resource controls into the sliders.
+            </span>
+          </div>
+        )}
       </div>
       <MapPreview serverId={server.id} mapGen={mapGen} />
       <MapGenEditor value={mapGen} onChange={setMapGen} mode={mode} />

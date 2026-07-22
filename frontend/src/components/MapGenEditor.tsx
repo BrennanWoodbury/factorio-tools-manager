@@ -152,7 +152,23 @@ const PLANETS: Planet[] = [
 
 function planetsForMode(mode: string): Planet[] {
   if (mode === 'vanilla') return PLANETS.filter((p) => p.key === 'nauvis');
-  return PLANETS; // space_age + modded (modded still shows the curated set; import covers the rest)
+  return PLANETS; // space_age + space_age_no_quality — same planets
+}
+
+/** Turn an autoplace-control name into a readable label (e.g. tungsten_ore → Tungsten ore). */
+function prettify(key: string): string {
+  const s = key.replace(/[-_]/g, ' ').trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Modded: derive the control list dynamically from whatever's in the settings. */
+function dynamicControls(value: MapGenSettings): Ctrl[] {
+  const ac = (value.autoplace_controls as Record<string, any>) ?? {};
+  return Object.entries(ac).map(([key, v]) => ({
+    key,
+    label: prettify(key),
+    richness: !!v && typeof v === 'object' && 'richness' in v,
+  }));
 }
 
 /**
@@ -187,9 +203,13 @@ export function MapGenEditor({
     void loadTemplates();
   }, [loadTemplates]);
 
-  const planets = planetsForMode(mode);
-  // Every resource control across the visible planets (for the "set all" master).
-  const resourceKeys = planets.flatMap((p) => p.controls.filter((c) => c.richness).map((c) => c.key));
+  const modded = mode === 'modded';
+  const planets = modded ? [] : planetsForMode(mode);
+  const modCtrls = modded ? dynamicControls(value) : [];
+  // Every resource control (richness-bearing) shown, for the "set all" master.
+  const resourceKeys = modded
+    ? modCtrls.filter((c) => c.richness).map((c) => c.key)
+    : planets.flatMap((p) => p.controls.filter((c) => c.richness).map((c) => c.key));
 
   const g = (path: (string | number)[], dflt = 1): number => {
     const v = getPath(value, path);
@@ -311,12 +331,26 @@ export function MapGenEditor({
         )}
       </Group>
 
-      {planets.map((p) => (
-        <div key={p.key} style={{ marginBottom: 6 }}>
-          {planets.length > 1 && <h3 style={{ margin: '4px 0 10px' }}>{p.label}</h3>}
-          {p.controls.map(controlSliders)}
-        </div>
-      ))}
+      {!modded &&
+        planets.map((p) => (
+          <div key={p.key} style={{ marginBottom: 6 }}>
+            {planets.length > 1 && <h3 style={{ margin: '4px 0 10px' }}>{p.label}</h3>}
+            {p.controls.map(controlSliders)}
+          </div>
+        ))}
+
+      {modded &&
+        (modCtrls.length > 0 ? (
+          <>
+            <h3 style={{ margin: '4px 0 10px' }}>Resources &amp; terrain (from this server's mods)</h3>
+            {modCtrls.map(controlSliders)}
+          </>
+        ) : (
+          <div className="small muted" style={{ marginBottom: 12 }}>
+            No resources detected yet — use <strong>Detect resources from mods</strong> above (or
+            import an exchange string) to load this modpack's controls.
+          </div>
+        ))}
 
       <h3 style={{ marginBottom: 12 }}>Global</h3>
       <Group title="Cliffs">

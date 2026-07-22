@@ -641,6 +641,38 @@ export class ServerManager {
   }
 
   /**
+   * The default map-gen settings for this server's loaded mods — the complete control
+   * set (including modded resources) at defaults. Runs a throwaway scenario with the
+   * server's mod directory so downloaded mods load. Used to build dynamic sliders for
+   * Modded servers.
+   */
+  async mapGenBaseline(
+    id: string,
+  ): Promise<{ mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> }> {
+    const row = this.get(id);
+    serverFiles.ensureDirs(id);
+    serverFiles.writeBaselineScenario(id);
+    const { logs } = await this.docker.runOneShot(
+      row,
+      serverFiles.hostDir(id),
+      [
+        '--start-server-load-scenario',
+        'ftm-baseline',
+        '--server-settings',
+        '/factorio/.import/server-settings.json',
+        '--mod-directory',
+        '/factorio/mods',
+      ],
+      90_000,
+    );
+    const json = extractMarker(logs);
+    if (!json) throw new DockerError(`map-gen baseline failed: ${logs.slice(-400)}`);
+    const data = JSON.parse(json) as { map_gen_settings?: Record<string, unknown>; map_settings?: Record<string, unknown> };
+    if (!data.map_gen_settings) throw new DockerError('baseline produced no map_gen_settings');
+    return { mapGen: data.map_gen_settings, mapSettings: data.map_settings ?? {} };
+  }
+
+  /**
    * Encode map-gen settings into a shareable exchange string via Factorio's own
    * `game.get_map_exchange_string()` (a throwaway scenario one-shot). On-demand only.
    */
