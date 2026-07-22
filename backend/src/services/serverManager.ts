@@ -12,6 +12,12 @@ import { getFactorioAccount } from './factorioAccount.js';
 import { CASCADE, getGlobalDefaults, resetServerSetting, type CascadeDef } from './globalDefaults.js';
 import { DockerError, DuplicateSubdomainError, NotFoundError, ValidationError } from '../lib/errors.js';
 
+/** Extract the payload our decode/encode scenarios log between FTM_BEGIN…FTM_END. */
+function extractMarker(logs: string): string | undefined {
+  const m = /FTM_BEGIN([\s\S]*?)FTM_END/.exec(logs);
+  return m ? m[1].trim() : undefined;
+}
+
 export interface CreateServerInput {
   name: string;
   subdomain: string;
@@ -306,25 +312,36 @@ export class ServerManager {
 
   // ---- Map generation (new-save settings) ----
 
-  /** Effective map-gen-settings for a server (defaults filled). */
-  getMapGen(id: string): { mapGen: Record<string, unknown> } {
-    return { mapGen: serverFiles.getMapGenSettings(this.get(id)) };
+  /** Effective map-gen-settings for a server (defaults filled) + any imported map-settings. */
+  getMapGen(id: string): { mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> | null } {
+    const row = this.get(id);
+    let mapSettings: Record<string, unknown> | null = null;
+    if (row.map_settings_json) {
+      try {
+        mapSettings = JSON.parse(row.map_settings_json) as Record<string, unknown>;
+      } catch {
+        mapSettings = null;
+      }
+    }
+    return { mapGen: serverFiles.getMapGenSettings(row), mapSettings };
   }
 
   /**
-   * Store new-map generation settings (map-gen-settings.json only — resources,
-   * water, terrain, cliffs, starting area, peaceful mode, seed). These only affect
-   * the NEXT map generated (a fresh start with no save, or an explicit "New save"),
-   * so no running game is restarted. (map-settings.json — pollution/evolution/
-   * expansion — is left to the image, which ships a version-matched file; Factorio
-   * rejects a hand-written one that doesn't match the exact binary version.)
+   * Store new-map generation settings, applied to the NEXT map generated (no running
+   * game restarts). `mapSettings` is stored only when provided — normally omitted
+   * (the image ships a version-matched map-settings.json; a hand-written one would
+   * crash Factorio's strict schema). It's supplied only by an exchange-string import,
+   * where it's version-correct because Factorio's own parser produced it.
    */
   async updateMapGen(
     id: string,
-    input: { mapGen: Record<string, unknown> },
-  ): Promise<{ mapGen: Record<string, unknown> }> {
+    input: { mapGen: Record<string, unknown>; mapSettings?: Record<string, unknown> | null },
+  ): Promise<{ mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> | null }> {
     this.get(id); // 404 if unknown
     this.repo.setMapGenSettingsJson(id, JSON.stringify(input.mapGen));
+    if (input.mapSettings !== undefined) {
+      this.repo.setMapSettingsJson(id, input.mapSettings ? JSON.stringify(input.mapSettings) : null);
+    }
     return this.getMapGen(id);
   }
 
@@ -487,6 +504,9 @@ export class ServerManager {
     if (row.map_gen_settings_json) {
       args.push('--map-gen-settings', '/factorio/config/map-gen-settings.json');
     }
+    if (row.map_settings_json) {
+      args.push('--map-settings', '/factorio/config/map-settings.json');
+    }
     const { exitCode, logs } = await this.docker.runOneShot(row, serverFiles.hostDir(id), args);
     if (exitCode !== 0 || !serverFiles.saveExists(id, name)) {
       throw new DockerError(`save generation failed (exit ${exitCode}): ${logs.slice(-500)}`);
@@ -540,6 +560,70 @@ export class ServerManager {
       throw new DockerError(`map preview failed (exit ${exitCode}): ${logs.slice(-500)}`);
     }
     return serverFiles.readPreview(id);
+  }
+
+  /**
+   * Decode a Factorio map exchange string into JSON using Factorio's own parser
+   * (`helpers.parse_map_exchange_string`) in a throwaway scenario one-shot — mounts
+   * the server's mods so their controls resolve. Returns the map-gen + map settings.
+   */
+  async importExchangeString(
+    id: string,
+    exchangeString: string,
+  ): Promise<{ mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> }> {
+    const row = this.get(id);
+    const s = exchangeString.trim();
+    if (!/^>>>[A-Za-z0-9+/=\r\n]+<<<$/.test(s)) {
+      throw new ValidationError('Not a valid Factorio map exchange string (expected >>>…<<<)');
+    }
+    serverFiles.ensureDirs(id);
+    serverFiles.writeDecoderScenario(id, s.replace(/[\r\n]/g, ''));
+    const { logs } = await this.docker.runOneShot(
+      row,
+      serverFiles.hostDir(id),
+      ['--start-server-load-scenario', 'ftm-decode', '--server-settings', '/factorio/.import/server-settings.json'],
+      60_000,
+    );
+    const json = extractMarker(logs);
+    if (!json) {
+      if (/FTM_ERR:/.test(logs)) {
+        throw new ValidationError(
+          "Couldn't decode that exchange string — it may reference mods this server doesn't have, or be from a different Factorio version.",
+        );
+      }
+      throw new DockerError(`exchange decode failed: ${logs.slice(-400)}`);
+    }
+    const data = JSON.parse(json) as { map_gen_settings?: Record<string, unknown>; map_settings?: Record<string, unknown> };
+    if (!data.map_gen_settings) throw new DockerError('decode produced no map_gen_settings');
+    return { mapGen: data.map_gen_settings, mapSettings: data.map_settings ?? {} };
+  }
+
+  /**
+   * Encode map-gen settings into a shareable exchange string via Factorio's own
+   * `game.get_map_exchange_string()` (a throwaway scenario one-shot). On-demand only.
+   */
+  async exportExchangeString(id: string, mapGen?: Record<string, unknown>): Promise<string> {
+    const row = this.get(id);
+    const settings = mapGen ?? serverFiles.getMapGenSettings(row);
+    serverFiles.ensureDirs(id);
+    serverFiles.writeEncoderScenario(id);
+    const mgsPath = serverFiles.writeEncodeSettings(id, settings);
+    const { logs } = await this.docker.runOneShot(
+      row,
+      serverFiles.hostDir(id),
+      [
+        '--start-server-load-scenario',
+        'ftm-encode',
+        '--server-settings',
+        '/factorio/.import/server-settings.json',
+        '--map-gen-settings',
+        mgsPath,
+      ],
+      60_000,
+    );
+    const str = extractMarker(logs);
+    if (!str || !str.startsWith('>>>')) throw new DockerError(`exchange encode failed: ${logs.slice(-400)}`);
+    return str.trim();
   }
 
   // ---- Backups ----

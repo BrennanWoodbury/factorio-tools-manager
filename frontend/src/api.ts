@@ -104,6 +104,14 @@ export const api = {
 
   // map generation (new-save settings)
   getMapGen: (id: string) => req<MapGen>('GET', `/servers/${id}/mapgen`),
+  importExchangeString: (id: string, exchangeString: string) =>
+    req<{ mapGen: Record<string, unknown>; mapSettings: Record<string, unknown> }>(
+      'POST',
+      `/servers/${id}/mapgen/import`,
+      { exchangeString },
+    ),
+  exportExchangeString: (id: string, mapGen?: Record<string, unknown>) =>
+    req<{ exchangeString: string }>('POST', `/servers/${id}/mapgen/export`, { mapGen }),
   previewMap: async (
     id: string,
     body: { mapGen?: Record<string, unknown>; planet?: string; seed?: number; size?: number },
@@ -120,8 +128,10 @@ export const api = {
     }
     return res.blob();
   },
-  setMapGen: (id: string, patch: { mapGen: Record<string, unknown> }) =>
-    req<MapGen>('PUT', `/servers/${id}/mapgen`, patch),
+  setMapGen: (
+    id: string,
+    patch: { mapGen: Record<string, unknown>; mapSettings?: Record<string, unknown> | null },
+  ) => req<MapGen>('PUT', `/servers/${id}/mapgen`, patch),
 
   // map-generation templates (shared presets)
   mapGenDefaults: () => req<{ settings: Record<string, unknown> }>('GET', '/mapgen-templates/defaults'),

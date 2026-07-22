@@ -213,7 +213,14 @@ export class ServerFilesService {
    * incomplete map-settings.json. Called before each start and before createSave.
    */
   writeMapGenSettings(server: ServerRow): void {
-    this.healMapSettings(server.id);
+    // map-settings.json: write the imported (version-correct) one if the server has
+    // it; otherwise heal any stale incomplete file and let the image supply its own.
+    if (server.map_settings_json) {
+      this.ensureDirs(server.id);
+      fs.writeFileSync(this.mapSettingsPath(server.id), server.map_settings_json);
+    } else {
+      this.healMapSettings(server.id);
+    }
     if (!server.map_gen_settings_json) return; // uncustomized → use the image's example
     this.ensureDirs(server.id);
     fs.writeFileSync(
@@ -246,6 +253,77 @@ export class ServerFilesService {
     const p = path.join(this.previewDir(serverId), 'out.png');
     if (!fs.existsSync(p)) throw new NotFoundError('Map preview');
     return fs.readFileSync(p);
+  }
+
+  // ---- Exchange string decode/encode (headless scenario one-shots) ----
+
+  private importScratchDir(serverId: string): string {
+    return path.join(this.localDir(serverId), '.import');
+  }
+
+  /** Minimal server-settings.json required by --start-server-load-scenario. */
+  private writeScenarioServerSettings(serverId: string): string {
+    const dir = this.importScratchDir(serverId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'server-settings.json'),
+      JSON.stringify({
+        name: 'ftm',
+        description: '',
+        visibility: { public: false, lan: false },
+        require_user_verification: false,
+        game_password: '',
+        allow_commands: 'admins-only',
+      }),
+    );
+    return '/factorio/.import/server-settings.json';
+  }
+
+  /**
+   * Write a throwaway scenario whose control.lua decodes `exchangeString` with
+   * Factorio's own `helpers.parse_map_exchange_string`, logs the JSON between
+   * markers, then aborts (fast exit). `exchangeString` must be pre-validated to the
+   * `>>>base64<<<` charset so it's safe to embed in a Lua long-bracket string.
+   */
+  writeDecoderScenario(serverId: string, exchangeString: string): string {
+    const dir = path.join(this.localDir(serverId), 'scenarios', 'ftm-decode');
+    fs.mkdirSync(dir, { recursive: true });
+    const lua =
+      'script.on_init(function()\n' +
+      '  local ok, data = pcall(function() return helpers.parse_map_exchange_string([==[' +
+      exchangeString +
+      ']==]) end)\n' +
+      '  if ok then log("FTM_BEGIN"..helpers.table_to_json(data).."FTM_END") else log("FTM_ERR:"..tostring(data)) end\n' +
+      '  error("FTM_STOP")\n' +
+      'end)\n';
+    fs.writeFileSync(path.join(dir, 'control.lua'), lua);
+    return this.writeScenarioServerSettings(serverId);
+  }
+
+  /**
+   * Write a throwaway scenario that emits the current map's exchange string via
+   * `game.get_map_exchange_string()`. Run it with `--map-gen-settings` pointing at
+   * the settings to encode (written by `writeEncodeSettings`).
+   */
+  writeEncoderScenario(serverId: string): string {
+    const dir = path.join(this.localDir(serverId), 'scenarios', 'ftm-encode');
+    fs.mkdirSync(dir, { recursive: true });
+    const lua =
+      'script.on_init(function()\n' +
+      '  local ok, s = pcall(function() return game.get_map_exchange_string() end)\n' +
+      '  if ok then log("FTM_BEGIN"..s.."FTM_END") else log("FTM_ERR:"..tostring(s)) end\n' +
+      '  error("FTM_STOP")\n' +
+      'end)\n';
+    fs.writeFileSync(path.join(dir, 'control.lua'), lua);
+    return this.writeScenarioServerSettings(serverId);
+  }
+
+  /** Write the map-gen settings to encode; returns the in-container path. */
+  writeEncodeSettings(serverId: string, mapGen: Record<string, unknown>): string {
+    const dir = this.importScratchDir(serverId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'encode-mgs.json'), JSON.stringify(mapGen));
+    return '/factorio/.import/encode-mgs.json';
   }
 
   // ---- RCON password ----

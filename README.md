@@ -157,6 +157,11 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Map preview:** on the Map gen tab, a **Preview map** button renders a PNG of your current
   (unsaved) settings via a throwaway Factorio one-shot (`--generate-map-preview`, using the server's
   mods) — click the thumbnail to expand it full-res, or reroll the seed.
+- **Map exchange strings:** paste a `>>>…<<<` string from Factorio's in-game map generator to
+  **import** it — decoded to JSON by Factorio's own parser in a one-shot (needs the same version +
+  mods), which populates the sliders and attaches version-correct map settings — or **export** the
+  current settings as a shareable string on demand. An **Advanced** section edits the raw
+  map-gen-settings JSON directly.
 - **Map templates:** save a map-gen configuration as a named, reusable **template** (e.g. "all ores
   at 300%") and pick it when creating a server. A template is just a JSON manifest + DB record — no
   server link — that's **exportable/importable** for sharing. Managed under the **Templates** tab;

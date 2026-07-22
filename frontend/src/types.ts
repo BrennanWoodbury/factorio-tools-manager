@@ -35,6 +35,7 @@ export interface Server {
 export type MapGenSettings = Record<string, unknown>;
 export interface MapGen {
   mapGen: MapGenSettings;
+  mapSettings?: MapGenSettings | null;
 }
 
 /** Global server defaults (cascading, per-server overridable). */

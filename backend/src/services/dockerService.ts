@@ -276,10 +276,12 @@ export class DockerService {
   }
 
   private async readContainerLogs(container: Docker.Container): Promise<string> {
+    // No tail limit: one-shots emit results we parse (e.g. a multi-KB exchange-string
+    // JSON on a single line) that a small tail can drop. One-shots are short-lived,
+    // so the full log is small.
     const buf = (await container.logs({
       stdout: true,
       stderr: true,
-      tail: 200,
       follow: false,
     })) as unknown as Buffer;
     return stripDockerLogHeader(buf);

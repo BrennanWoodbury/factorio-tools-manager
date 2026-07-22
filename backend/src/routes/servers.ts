@@ -207,8 +207,32 @@ export function serversRouter(ctx: AppContext): Router {
   r.put(
     '/:id/mapgen',
     asyncHandler(async (req, res) => {
-      const body = parse(z.object({ mapGen: z.record(z.string(), z.unknown()) }), req.body);
+      const body = parse(
+        z.object({
+          mapGen: z.record(z.string(), z.unknown()),
+          mapSettings: z.record(z.string(), z.unknown()).nullable().optional(),
+        }),
+        req.body,
+      );
       res.json(await manager.updateMapGen(req.params.id, body));
+    }),
+  );
+
+  // Decode a map exchange string into JSON (Factorio's own parser, one-shot).
+  r.post(
+    '/:id/mapgen/import',
+    asyncHandler(async (req, res) => {
+      const body = parse(z.object({ exchangeString: z.string().min(6).max(200000) }), req.body);
+      res.json(await manager.importExchangeString(req.params.id, body.exchangeString));
+    }),
+  );
+
+  // Encode the given (or saved) settings into a shareable exchange string (on-demand).
+  r.post(
+    '/:id/mapgen/export',
+    asyncHandler(async (req, res) => {
+      const body = parse(z.object({ mapGen: z.record(z.string(), z.unknown()).optional() }), req.body ?? {});
+      res.json({ exchangeString: await manager.exportExchangeString(req.params.id, body.mapGen) });
     }),
   );
 
