@@ -104,6 +104,22 @@ export const api = {
 
   // map generation (new-save settings)
   getMapGen: (id: string) => req<MapGen>('GET', `/servers/${id}/mapgen`),
+  previewMap: async (
+    id: string,
+    body: { mapGen?: Record<string, unknown>; planet?: string; seed?: number; size?: number },
+  ): Promise<Blob> => {
+    const res = await fetch(`/api/servers/${id}/mapgen/preview`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null)) as { error?: { code: string; message: string } } | null;
+      throw new ApiError(err?.error?.message ?? `HTTP ${res.status}`, err?.error?.code ?? 'ERROR', res.status);
+    }
+    return res.blob();
+  },
   setMapGen: (id: string, patch: { mapGen: Record<string, unknown> }) =>
     req<MapGen>('PUT', `/servers/${id}/mapgen`, patch),
 

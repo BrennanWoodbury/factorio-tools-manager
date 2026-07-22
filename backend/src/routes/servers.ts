@@ -212,6 +212,26 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  // Render a map preview PNG (current editor settings, or the server's saved ones).
+  r.post(
+    '/:id/mapgen/preview',
+    asyncHandler(async (req, res) => {
+      const body = parse(
+        z.object({
+          mapGen: z.record(z.string(), z.unknown()).optional(),
+          planet: z.string().max(40).optional(),
+          seed: z.number().int().optional(),
+          size: z.number().int().min(256).max(2048).optional(),
+        }),
+        req.body ?? {},
+      );
+      const png = await manager.previewMap(req.params.id, body);
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(png);
+    }),
+  );
+
   // ---- Per-server player whitelist ----
 
   r.get(

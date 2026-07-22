@@ -154,6 +154,9 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   alter an existing world. `map-settings.json` (pollution/evolution/expansion) is left to the image's
   version-matched example — Factorio validates it strictly against the exact binary version, so a
   hand-written one isn't safe.
+- **Map preview:** on the Map gen tab, a **Preview map** button renders a PNG of your current
+  (unsaved) settings via a throwaway Factorio one-shot (`--generate-map-preview`, using the server's
+  mods) — click the thumbnail to expand it full-res, or reroll the seed.
 - **Map templates:** save a map-gen configuration as a named, reusable **template** (e.g. "all ores
   at 300%") and pick it when creating a server. A template is just a JSON manifest + DB record — no
   server link — that's **exportable/importable** for sharing. Managed under the **Templates** tab;

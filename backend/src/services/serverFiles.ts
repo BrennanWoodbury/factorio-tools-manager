@@ -222,6 +222,32 @@ export class ServerFilesService {
     );
   }
 
+  // ---- Map preview (scratch dir under the server data dir, mounted into one-shots) ----
+
+  previewDir(serverId: string): string {
+    return path.join(this.localDir(serverId), '.preview');
+  }
+
+  /** Write a map-gen-settings object to the preview scratch dir; returns the in-container path. */
+  writePreviewSettings(serverId: string, settings: Record<string, unknown>): string {
+    const dir = this.previewDir(serverId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'map-gen-settings.json'), JSON.stringify(settings, null, 2));
+    return '/factorio/.preview/map-gen-settings.json'; // path as the container sees it
+  }
+
+  /** In-container path where a preview one-shot should write its PNG. */
+  previewOutContainerPath(): string {
+    return '/factorio/.preview/out.png';
+  }
+
+  /** Read the PNG produced by a preview one-shot. */
+  readPreview(serverId: string): Buffer {
+    const p = path.join(this.previewDir(serverId), 'out.png');
+    if (!fs.existsSync(p)) throw new NotFoundError('Map preview');
+    return fs.readFileSync(p);
+  }
+
   // ---- RCON password ----
 
   rconPasswordPath(serverId: string): string {

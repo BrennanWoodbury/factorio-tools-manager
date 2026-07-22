@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { MapGenSettings, Server } from '../types';
 import { run, toastError } from '../ui';
 import { MapGenEditor } from './MapGenEditor';
+import { MapPreview } from './MapPreview';
 
 export function MapGenPanel({ server }: { server: Server }) {
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
@@ -43,6 +44,7 @@ export function MapGenPanel({ server }: { server: Server }) {
         save: <span className="mono">{server.saveName}</span>. Manage reusable presets under{' '}
         <strong>Templates</strong>.
       </div>
+      <MapPreview serverId={server.id} mapGen={mapGen} />
       <MapGenEditor value={mapGen} onChange={setMapGen} />
     </div>
   );

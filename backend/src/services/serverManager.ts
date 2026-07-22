@@ -510,6 +510,38 @@ export class ServerManager {
     return this.get(id);
   }
 
+  /**
+   * Render a map preview PNG for the given settings (or the server's saved ones) via
+   * a throwaway one-shot. Runs the binary with `--generate-map-preview`, mounting the
+   * server's data dir (so its mods resolve), and returns the PNG bytes. Preview-only:
+   * writes to a scratch dir, never touches the real save/config.
+   */
+  async previewMap(
+    id: string,
+    opts: { mapGen?: Record<string, unknown>; planet?: string; seed?: number; size?: number } = {},
+  ): Promise<Buffer> {
+    const row = this.get(id);
+    serverFiles.ensureDirs(id);
+    const settings = opts.mapGen ?? serverFiles.getMapGenSettings(row);
+    const settingsPath = serverFiles.writePreviewSettings(id, settings);
+    const size = Math.min(2048, Math.max(256, Math.floor(opts.size ?? 1024)));
+    const args = [
+      '--generate-map-preview',
+      serverFiles.previewOutContainerPath(),
+      '--map-preview-size',
+      String(size),
+      '--map-gen-settings',
+      settingsPath,
+    ];
+    if (opts.planet) args.push('--map-preview-planet', opts.planet);
+    if (opts.seed !== undefined && Number.isFinite(opts.seed)) args.push('--map-gen-seed', String(Math.floor(opts.seed)));
+    const { exitCode, logs } = await this.docker.runOneShot(row, serverFiles.hostDir(id), args, 90_000);
+    if (exitCode !== 0) {
+      throw new DockerError(`map preview failed (exit ${exitCode}): ${logs.slice(-500)}`);
+    }
+    return serverFiles.readPreview(id);
+  }
+
   // ---- Backups ----
 
   /**
