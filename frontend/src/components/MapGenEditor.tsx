@@ -90,38 +90,88 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-const RESOURCES: { key: string; label: string; richness: boolean }[] = [
-  { key: 'iron-ore', label: 'Iron ore', richness: true },
-  { key: 'copper-ore', label: 'Copper ore', richness: true },
-  { key: 'coal', label: 'Coal', richness: true },
-  { key: 'stone', label: 'Stone', richness: true },
-  { key: 'uranium-ore', label: 'Uranium ore', richness: true },
-  { key: 'crude-oil', label: 'Oil', richness: true },
+type Ctrl = { key: string; label: string; richness?: boolean };
+type Planet = { key: string; label: string; controls: Ctrl[] };
+
+// Curated Space Age control schema (from --dump-data): each planet's autoplace
+// controls, keyed by their globally-unique names. Vanilla shows only Nauvis.
+const PLANETS: Planet[] = [
+  {
+    key: 'nauvis',
+    label: 'Nauvis',
+    controls: [
+      { key: 'iron-ore', label: 'Iron ore', richness: true },
+      { key: 'copper-ore', label: 'Copper ore', richness: true },
+      { key: 'coal', label: 'Coal', richness: true },
+      { key: 'stone', label: 'Stone', richness: true },
+      { key: 'uranium-ore', label: 'Uranium ore', richness: true },
+      { key: 'crude-oil', label: 'Oil', richness: true },
+      { key: 'water', label: 'Water' },
+      { key: 'trees', label: 'Trees' },
+      { key: 'enemy-base', label: 'Enemy bases' },
+    ],
+  },
+  {
+    key: 'vulcanus',
+    label: 'Vulcanus',
+    controls: [
+      { key: 'tungsten_ore', label: 'Tungsten', richness: true },
+      { key: 'calcite', label: 'Calcite', richness: true },
+      { key: 'vulcanus_coal', label: 'Coal', richness: true },
+      { key: 'sulfuric_acid_geyser', label: 'Sulfuric acid', richness: true },
+    ],
+  },
+  {
+    key: 'gleba',
+    label: 'Gleba',
+    controls: [
+      { key: 'gleba_stone', label: 'Stone', richness: true },
+      { key: 'gleba_plants', label: 'Plants' },
+      { key: 'gleba_water', label: 'Water' },
+      { key: 'gleba_enemy_base', label: 'Enemy bases' },
+    ],
+  },
+  {
+    key: 'fulgora',
+    label: 'Fulgora',
+    controls: [
+      { key: 'scrap', label: 'Scrap', richness: true },
+      { key: 'fulgora_islands', label: 'Islands' },
+    ],
+  },
+  {
+    key: 'aquilo',
+    label: 'Aquilo',
+    controls: [
+      { key: 'aquilo_crude_oil', label: 'Oil', richness: true },
+      { key: 'lithium_brine', label: 'Lithium brine', richness: true },
+      { key: 'fluorine_vent', label: 'Fluorine vent', richness: true },
+    ],
+  },
 ];
 
-const TERRAIN: { key: string; label: string }[] = [
-  { key: 'water', label: 'Water' },
-  { key: 'trees', label: 'Trees' },
-  { key: 'enemy-base', label: 'Enemy bases' },
-];
+function planetsForMode(mode: string): Planet[] {
+  if (mode === 'vanilla') return PLANETS.filter((p) => p.key === 'nauvis');
+  return PLANETS; // space_age + modded (modded still shows the curated set; import covers the rest)
+}
 
 /**
  * Controlled editor for a map-gen-settings object, presented as the in-game
- * map-generation sliders. Optionally shows a template bar (load a saved preset into
- * the editor / save the current settings as a new template). The parent owns
- * persistence — this component only reads `value` and emits `onChange`.
+ * map-generation sliders, grouped per planet according to the game mode. The parent
+ * owns persistence — this only reads `value` and emits `onChange`.
  */
 export function MapGenEditor({
   value,
   onChange,
   showTemplates = true,
+  mode = 'space_age',
 }: {
   value: MapGenSettings;
   onChange: (v: MapGenSettings) => void;
   showTemplates?: boolean;
+  mode?: string;
 }) {
   const [templates, setTemplates] = useState<MapGenTemplate[]>([]);
-  // "Link all resources": drive every ore's freq/size/richness from one master set.
   const [bulk, setBulk] = useState(false);
 
   const loadTemplates = useCallback(async () => {
@@ -137,6 +187,10 @@ export function MapGenEditor({
     void loadTemplates();
   }, [loadTemplates]);
 
+  const planets = planetsForMode(mode);
+  // Every resource control across the visible planets (for the "set all" master).
+  const resourceKeys = planets.flatMap((p) => p.controls.filter((c) => c.richness).map((c) => c.key));
+
   const g = (path: (string | number)[], dflt = 1): number => {
     const v = getPath(value, path);
     return typeof v === 'number' ? v : dflt;
@@ -147,22 +201,18 @@ export function MapGenEditor({
   const setControl = (key: string, field: 'frequency' | 'size' | 'richness', v: number) =>
     sg(['autoplace_controls', key, field], v);
 
-  // ---- master "link all resources" controls ----
-  type Field = 'frequency' | 'size' | 'richness';
-  // Set one field to `v` across every ore in a single update.
-  const setAllResources = (field: Field, v: number) => {
+  const setAllResources = (field: 'frequency' | 'size' | 'richness', v: number) => {
     let next = value;
-    for (const r of RESOURCES) next = setPath(next, ['autoplace_controls', r.key, field], v);
+    for (const k of resourceKeys) next = setPath(next, ['autoplace_controls', k, field], v);
     onChange(next);
   };
   const toggleBulk = (on: boolean) => {
     setBulk(on);
-    if (!on) return;
-    // Snap every ore to the first ore's values so the master reflects them all.
+    if (!on || resourceKeys.length === 0) return;
     let next = value;
-    for (const field of ['frequency', 'size', 'richness'] as Field[]) {
-      const v = control(RESOURCES[0].key, field);
-      for (const r of RESOURCES) next = setPath(next, ['autoplace_controls', r.key, field], v);
+    for (const field of ['frequency', 'size', 'richness'] as const) {
+      const v = control(resourceKeys[0], field);
+      for (const k of resourceKeys) next = setPath(next, ['autoplace_controls', k, field], v);
     }
     onChange(next);
   };
@@ -186,7 +236,6 @@ export function MapGenEditor({
       toastError((err as Error).message);
     }
   };
-
   const saveAsTemplate = async () => {
     const name = prompt('Save current settings as a template named:');
     if (!name?.trim()) return;
@@ -196,6 +245,31 @@ export function MapGenEditor({
     );
     if (ok) await loadTemplates();
   };
+
+  const controlSliders = (c: Ctrl) => (
+    <Group key={c.key} title={c.label}>
+      <Slider
+        label="Frequency"
+        disabled={bulk && !!c.richness}
+        value={control(c.key, 'frequency')}
+        onChange={(v) => setControl(c.key, 'frequency', v)}
+      />
+      <Slider
+        label={c.key.includes('water') ? 'Coverage' : 'Size'}
+        disabled={bulk && !!c.richness}
+        value={control(c.key, 'size')}
+        onChange={(v) => setControl(c.key, 'size', v)}
+      />
+      {c.richness && (
+        <Slider
+          label="Richness"
+          disabled={bulk}
+          value={control(c.key, 'richness')}
+          onChange={(v) => setControl(c.key, 'richness', v)}
+        />
+      )}
+    </Group>
+  );
 
   return (
     <div>
@@ -222,108 +296,41 @@ export function MapGenEditor({
         </div>
       )}
 
-      <h3 style={{ marginBottom: 8, marginTop: 0 }}>Resources</h3>
-      <div className="small muted" style={{ marginBottom: 12 }}>
-        Frequency = how often patches occur · Size = patch size · Richness = yield per tile.
-      </div>
-
-      {/* Master control: when checked, every ore inherits these values. */}
+      {/* Master control: when checked, every resource inherits these values. */}
       <Group title="All resources">
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: bulk ? 12 : 0 }}>
-          <input
-            type="checkbox"
-            style={{ width: 'auto' }}
-            checked={bulk}
-            onChange={(e) => toggleBulk(e.target.checked)}
-          />
+          <input type="checkbox" style={{ width: 'auto' }} checked={bulk} onChange={(e) => toggleBulk(e.target.checked)} />
           Set values for every resource at once
         </label>
-        <Slider
-          label="Frequency"
-          disabled={!bulk}
-          value={control(RESOURCES[0].key, 'frequency')}
-          onChange={(v) => setAllResources('frequency', v)}
-        />
-        <Slider
-          label="Size"
-          disabled={!bulk}
-          value={control(RESOURCES[0].key, 'size')}
-          onChange={(v) => setAllResources('size', v)}
-        />
-        <Slider
-          label="Richness"
-          disabled={!bulk}
-          value={control(RESOURCES[0].key, 'richness')}
-          onChange={(v) => setAllResources('richness', v)}
-        />
+        {resourceKeys.length > 0 && (
+          <>
+            <Slider label="Frequency" disabled={!bulk} value={control(resourceKeys[0], 'frequency')} onChange={(v) => setAllResources('frequency', v)} />
+            <Slider label="Size" disabled={!bulk} value={control(resourceKeys[0], 'size')} onChange={(v) => setAllResources('size', v)} />
+            <Slider label="Richness" disabled={!bulk} value={control(resourceKeys[0], 'richness')} onChange={(v) => setAllResources('richness', v)} />
+          </>
+        )}
       </Group>
 
-      {RESOURCES.map((r) => (
-        <Group key={r.key} title={r.label}>
-          <Slider
-            label="Frequency"
-            disabled={bulk}
-            value={control(r.key, 'frequency')}
-            onChange={(v) => setControl(r.key, 'frequency', v)}
-          />
-          <Slider
-            label="Size"
-            disabled={bulk}
-            value={control(r.key, 'size')}
-            onChange={(v) => setControl(r.key, 'size', v)}
-          />
-          {r.richness && (
-            <Slider
-              label="Richness"
-              disabled={bulk}
-              value={control(r.key, 'richness')}
-              onChange={(v) => setControl(r.key, 'richness', v)}
-            />
-          )}
-        </Group>
+      {planets.map((p) => (
+        <div key={p.key} style={{ marginBottom: 6 }}>
+          {planets.length > 1 && <h3 style={{ margin: '4px 0 10px' }}>{p.label}</h3>}
+          {p.controls.map(controlSliders)}
+        </div>
       ))}
 
-      <h3 style={{ marginBottom: 12 }}>Terrain &amp; enemies</h3>
-      {TERRAIN.map((t) => (
-        <Group key={t.key} title={t.label}>
-          <Slider
-            label={t.key === 'water' ? 'Scale' : 'Frequency'}
-            value={control(t.key, 'frequency')}
-            onChange={(v) => setControl(t.key, 'frequency', v)}
-          />
-          <Slider
-            label={t.key === 'water' ? 'Coverage' : 'Size'}
-            value={control(t.key, 'size')}
-            onChange={(v) => setControl(t.key, 'size', v)}
-          />
-        </Group>
-      ))}
-
+      <h3 style={{ marginBottom: 12 }}>Global</h3>
       <Group title="Cliffs">
         <Slider label="Frequency" value={cliffFreq} onChange={setCliffFreq} />
-        <Slider
-          label="Continuity"
-          value={cliffRichness}
-          max={10}
-          onChange={(v) => sg(['cliff_settings', 'richness'], v)}
-        />
+        <Slider label="Continuity" value={cliffRichness} max={10} onChange={(v) => sg(['cliff_settings', 'richness'], v)} />
       </Group>
-
       <Group title="Starting area">
         <Slider label="Size" value={g(['starting_area'])} onChange={(v) => sg(['starting_area'], v)} />
       </Group>
-
       <Group title="World options">
         <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input
-            type="checkbox"
-            style={{ width: 'auto' }}
-            checked={peaceful}
-            onChange={(e) => sg(['peaceful_mode'], e.target.checked)}
-          />
+          <input type="checkbox" style={{ width: 'auto' }} checked={peaceful} onChange={(e) => sg(['peaceful_mode'], e.target.checked)} />
           Peaceful mode (enemies don't attack unless provoked)
         </label>
-
         <label style={{ marginTop: 14 }}>Map seed (blank = random)</label>
         <input
           type="number"

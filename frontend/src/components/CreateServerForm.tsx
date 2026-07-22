@@ -5,6 +5,7 @@ import { toastError, toastSuccess } from '../ui';
 import { FactorioTagSelect } from './FactorioTagSelect';
 import { MapGenEditor } from './MapGenEditor';
 import { DnsNamePreview } from './DnsNamePreview';
+import { GameModeSelect } from './GameModeSelect';
 
 export function CreateServerForm({
   onClose,
@@ -22,6 +23,7 @@ export function CreateServerForm({
   const [maxPlayers, setMaxPlayers] = useState(0);
   const [description, setDescription] = useState('');
   const [factorioTag, setFactorioTag] = useState('stable');
+  const [gameMode, setGameMode] = useState('space_age');
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -47,6 +49,7 @@ export function CreateServerForm({
         description,
         generateNewSave: true,
         factorioTag: factorioTag.trim() || undefined,
+        gameMode,
         mapGen: mapGen ?? undefined,
       });
       toastSuccess(`Created "${server.name}"`);
@@ -109,6 +112,10 @@ export function CreateServerForm({
           Servers dashboard) — one account for every server.
         </div>
 
+        <div style={{ marginTop: 12 }}>
+          <GameModeSelect value={gameMode} onChange={setGameMode} />
+        </div>
+
         <details style={{ marginTop: 12 }} onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) void initMapGen(); }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>
             Map generation (optional — pick a template or tune ore/water/terrain)
@@ -118,7 +125,7 @@ export function CreateServerForm({
             defaults. Load a saved <strong>template</strong> or adjust the sliders below.
           </div>
           {mapGen ? (
-            <MapGenEditor value={mapGen} onChange={setMapGen} />
+            <MapGenEditor value={mapGen} onChange={setMapGen} mode={gameMode} />
           ) : (
             <div className="muted small">Loading defaults…</div>
           )}

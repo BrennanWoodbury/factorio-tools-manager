@@ -48,6 +48,8 @@ export interface ServerRow {
   map_gen_settings_json: string | null;
   /** New-map enemy/pollution settings (map-settings.json). Migration v10. */
   map_settings_json: string | null;
+  /** 'vanilla' | 'space_age' | 'modded'. Migration v13. */
+  game_mode: string;
 }
 
 /** API-facing server shape (camelCase, secrets stripped where appropriate). */
@@ -61,6 +63,7 @@ export interface ServerDto {
   rconPort: number;
   saveName: string;
   generateNewSave: boolean;
+  gameMode: string;
   hasFactorioCredentials: boolean;
   containerId: string | null;
   status: string;
@@ -104,6 +107,7 @@ export function toDto(
     rconPort: row.rcon_port,
     saveName: row.save_name,
     generateNewSave: row.generate_new_save === 1,
+    gameMode: row.game_mode ?? 'space_age',
     hasFactorioCredentials: opts?.hasFactorioCredentials ?? false,
     containerId: row.container_id,
     status: row.status,

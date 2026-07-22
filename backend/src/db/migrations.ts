@@ -120,6 +120,12 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 13,
+    // Game mode: 'vanilla' | 'space_age' | 'modded'. Drives the map-gen slider set
+    // (which planets show) and the bundled Space Age mods' enablement on start.
+    up: (db) => db.exec("ALTER TABLE servers ADD COLUMN game_mode TEXT NOT NULL DEFAULT 'space_age'"),
+  },
 ];
 
 export function runMigrations(db: DB): void {

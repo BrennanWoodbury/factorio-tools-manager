@@ -13,14 +13,14 @@ export class ServersRepo {
         `INSERT INTO servers
           (id, name, subdomain, description, max_players, game_port, rcon_port,
            rcon_password, save_name, generate_new_save, factorio_username,
-           factorio_token, factorio_tag, container_id, status,
+           factorio_token, factorio_tag, container_id, status, game_mode,
            auto_restart, auto_backup, backup_interval_minutes, backup_keep, backup_keep_manual,
            auto_restart_overridden, auto_backup_overridden, backup_interval_minutes_overridden,
            backup_keep_overridden, backup_keep_manual_overridden)
          VALUES
           (@id, @name, @subdomain, @description, @max_players, @game_port, @rcon_port,
            @rcon_password, @save_name, @generate_new_save, @factorio_username,
-           @factorio_token, @factorio_tag, @container_id, @status,
+           @factorio_token, @factorio_tag, @container_id, @status, @game_mode,
            @auto_restart, @auto_backup, @backup_interval_minutes, @backup_keep, @backup_keep_manual,
            @auto_restart_overridden, @auto_backup_overridden, @backup_interval_minutes_overridden,
            @backup_keep_overridden, @backup_keep_manual_overridden)`,

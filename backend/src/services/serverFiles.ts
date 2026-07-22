@@ -90,6 +90,9 @@ export class ServerFilesService {
       auto_pause: true,
       only_admins_can_pause_the_game: true,
       autosave_only_on_server: true,
+      // Default on: on Linux the server forks to autosave, so the game doesn't freeze
+      // during a save. Factorio flags it "experimental"; toggle off in Advanced settings.
+      non_blocking_saving: true,
     };
   }
 

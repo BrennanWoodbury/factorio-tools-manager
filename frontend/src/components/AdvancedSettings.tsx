@@ -173,6 +173,18 @@ export function AdvancedSettings({ serverId }: { serverId: string }) {
           />
           Only admins can pause
         </label>
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}
+          title="On Linux the server forks to autosave so the game doesn't freeze. Factorio flags this experimental."
+        >
+          <input
+            type="checkbox"
+            style={{ width: 'auto' }}
+            checked={settings.non_blocking_saving !== false}
+            onChange={(e) => set('non_blocking_saving', e.target.checked)}
+          />
+          Non-blocking saving
+        </label>
       </div>
 
       <div style={{ marginTop: 16 }}>

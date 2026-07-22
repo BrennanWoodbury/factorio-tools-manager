@@ -27,6 +27,7 @@ export interface CreateServerInput {
   generateNewSave?: boolean;
   factorioTag?: string;
   autoRestart?: boolean;
+  gameMode?: string;
   mods?: ModEntry[];
   /** Initial map-gen-settings for the server's first generated map (optional). */
   mapGen?: Record<string, unknown>;
@@ -41,6 +42,7 @@ export interface UpdateServerInput {
   generateNewSave?: boolean;
   factorioTag?: string;
   autoRestart?: boolean;
+  gameMode?: string;
   autoBackup?: boolean;
   backupIntervalMinutes?: number;
   backupKeep?: number;
@@ -48,6 +50,11 @@ export interface UpdateServerInput {
 }
 
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+const GAME_MODES = ['vanilla', 'space_age', 'modded'] as const;
+/** The bundled Space Age mods, toggled on/off by game mode. */
+const SPACE_AGE_MODS = ['space-age', 'quality', 'elevated-rails'];
+const cleanGameMode = (m: string | undefined): string =>
+  (GAME_MODES as readonly string[]).includes(m ?? '') ? (m as string) : 'space_age';
 // Valid Docker image tag (also allow empty to mean "use the global default").
 const TAG_RE = /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}$/;
 
@@ -148,6 +155,7 @@ export class ServerManager {
       map_gen_settings_json:
         input.mapGen && Object.keys(input.mapGen).length > 0 ? JSON.stringify(input.mapGen) : null,
       map_settings_json: null,
+      game_mode: cleanGameMode(input.gameMode),
     };
 
     // Phase 1: atomic DB write — insert row and claim ports together, so a port
@@ -214,6 +222,10 @@ export class ServerManager {
     if (input.factorioTag !== undefined) {
       const tag = this.cleanTag(input.factorioTag);
       if (tag !== (current.factorio_tag ?? '')) set('factorio_tag', tag, true);
+    }
+    if (input.gameMode !== undefined) {
+      const gm = cleanGameMode(input.gameMode);
+      if (gm !== current.game_mode) set('game_mode', gm, true); // changes mods → restart-relevant
     }
     // Cascading settings (auto_restart + backup config): explicitly setting one marks
     // it overridden, so it stops tracking the global default until reset. Never
@@ -456,6 +468,16 @@ export class ServerManager {
     // Recreate the container each start so it always reflects current config
     // (env vars, ports). Data lives in the bind mount, so this is cheap.
     serverFiles.writeServerSettings(row);
+    // Enforce the game mode's Space Age enablement in the mod list (bundled SA mods
+    // on for space_age/modded, off for vanilla), preserving any other mods.
+    const modList = serverFiles.readModList(id);
+    const saEnabled = row.game_mode !== 'vanilla';
+    for (const name of SPACE_AGE_MODS) {
+      const e = modList.find((m) => m.name === name);
+      if (e) e.enabled = saEnabled;
+      else modList.push({ name, enabled: saEnabled });
+    }
+    serverFiles.writeModList(id, modList);
     // Custom map-gen settings (if any) written to config/ so the image's `--create`
     // (GENERATE_NEW_SAVE=true, or first start with no saves) honours them; also heals
     // any stale incomplete map-settings.json left by an earlier build.

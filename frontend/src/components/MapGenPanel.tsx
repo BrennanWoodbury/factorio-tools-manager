@@ -4,9 +4,11 @@ import type { MapGenSettings, Server } from '../types';
 import { run, toastError, toastSuccess } from '../ui';
 import { MapGenEditor } from './MapGenEditor';
 import { MapPreview } from './MapPreview';
+import { GameModeSelect } from './GameModeSelect';
 
 export function MapGenPanel({ server }: { server: Server }) {
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
+  const [mode, setMode] = useState(server.gameMode);
   // Version-correct map-settings, only present after an exchange-string import.
   const [mapSettings, setMapSettings] = useState<MapGenSettings | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,6 +33,11 @@ export function MapGenPanel({ server }: { server: Server }) {
   }, [load]);
 
   if (!mapGen) return <div className="muted">Loading…</div>;
+
+  const changeMode = async (m: string) => {
+    setMode(m);
+    await run(() => api.updateServer(server.id, { gameMode: m }), 'Game mode saved (applies on next start)');
+  };
 
   const save = async () => {
     setBusy(true);
@@ -144,8 +151,11 @@ export function MapGenPanel({ server }: { server: Server }) {
         )}
       </details>
 
+      <div style={{ marginBottom: 12 }}>
+        <GameModeSelect value={mode} onChange={(m) => void changeMode(m)} />
+      </div>
       <MapPreview serverId={server.id} mapGen={mapGen} />
-      <MapGenEditor value={mapGen} onChange={setMapGen} />
+      <MapGenEditor value={mapGen} onChange={setMapGen} mode={mode} />
 
       {/* Advanced raw-JSON escape hatch */}
       <details style={{ marginTop: 12 }} onToggle={(e) => openAdvanced((e.target as HTMLDetailsElement).open)}>

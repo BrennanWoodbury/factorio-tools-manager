@@ -8,6 +8,7 @@ export interface Server {
   rconPort: number;
   saveName: string;
   generateNewSave: boolean;
+  gameMode: string;
   hasFactorioCredentials: boolean;
   containerId: string | null;
   status: string;
