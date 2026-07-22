@@ -5,6 +5,7 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 import { ValidationError } from '../lib/errors.js';
 import { dnsSettingsDto, getDnsSettings, setDnsSettings } from '../services/dnsSettings.js';
 import { factorioAccountDto, getFactorioAccount, setFactorioAccount } from '../services/factorioAccount.js';
+import { getGlobalDefaults, globalDefaultsDto, setGlobalDefaults } from '../services/globalDefaults.js';
 
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const r = schema.safeParse(body);
@@ -51,6 +52,41 @@ export function globalRouter(ctx: AppContext): Router {
     '/dns/test',
     asyncHandler(async (_req, res) => {
       res.json(await ctx.dns.testConnection());
+    }),
+  );
+
+  // ---- Global server defaults (cascading, per-server overridable) ----
+
+  const defaultsDto = () => {
+    const g = getGlobalDefaults(ctx.db);
+    const modpackName = g.modpackId
+      ? (ctx.modpacks.list().find((m) => m.id === g.modpackId)?.name ?? null)
+      : null;
+    const mapTemplateName = g.mapTemplateId
+      ? (ctx.mapGenTemplates.list().find((t) => t.id === g.mapTemplateId)?.name ?? null)
+      : null;
+    return globalDefaultsDto(ctx.db, { modpackName, mapTemplateName });
+  };
+
+  r.get('/defaults', asyncHandler(async (_req, res) => res.json({ defaults: defaultsDto() })));
+
+  r.put(
+    '/defaults',
+    asyncHandler(async (req, res) => {
+      const body = parse(
+        z.object({
+          autoRestart: z.boolean().optional(),
+          autoBackup: z.boolean().optional(),
+          backupIntervalMinutes: z.number().int().min(5).max(10080).optional(),
+          backupKeep: z.number().int().min(1).max(1000).optional(),
+          backupKeepManual: z.number().int().min(1).max(1000).optional(),
+          modpackId: z.string().nullable().optional(),
+          mapTemplateId: z.string().nullable().optional(),
+        }),
+        req.body,
+      );
+      setGlobalDefaults(ctx.db, body);
+      res.json({ defaults: defaultsDto() });
     }),
   );
 

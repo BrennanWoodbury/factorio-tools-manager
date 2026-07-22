@@ -20,6 +20,13 @@ export interface Server {
   backupIntervalMinutes: number;
   backupKeep: number;
   backupKeepManual: number;
+  overrides: {
+    autoRestart: boolean;
+    autoBackup: boolean;
+    backupIntervalMinutes: boolean;
+    backupKeep: boolean;
+    backupKeepManual: boolean;
+  };
   factorioImage?: string;
   connectHost?: string;
 }
@@ -29,6 +36,27 @@ export type MapGenSettings = Record<string, unknown>;
 export interface MapGen {
   mapGen: MapGenSettings;
 }
+
+/** Global server defaults (cascading, per-server overridable). */
+export interface GlobalDefaults {
+  autoRestart: boolean;
+  autoBackup: boolean;
+  backupIntervalMinutes: number;
+  backupKeep: number;
+  backupKeepManual: number;
+  modpackId: string | null;
+  mapTemplateId: string | null;
+  modpackName: string | null;
+  mapTemplateName: string | null;
+}
+
+/** Keys of the cascading scalar settings (match the backend). */
+export type CascadeKey =
+  | 'autoRestart'
+  | 'autoBackup'
+  | 'backupIntervalMinutes'
+  | 'backupKeep'
+  | 'backupKeepManual';
 
 /** The single global Factorio.com account (token never returned). */
 export interface FactorioAccount {

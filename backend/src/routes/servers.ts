@@ -8,6 +8,7 @@ import { ValidationError } from '../lib/errors.js';
 import { sanitizeName } from '../services/serverFiles.js';
 import { serverFiles } from '../services/serverFiles.js';
 import { getFactorioAccount, factorioAccountConfigured } from '../services/factorioAccount.js';
+import { getGlobalDefaults } from '../services/globalDefaults.js';
 
 const modEntrySchema = z.object({ name: z.string().min(1), enabled: z.boolean() });
 
@@ -74,9 +75,27 @@ export function serversRouter(ctx: AppContext): Router {
     '/',
     asyncHandler(async (req, res) => {
       const { mapGenTemplateId, ...input } = parse(createSchema, req.body);
-      // A chosen template supplies the initial map-gen settings (copied, not linked).
+      const defaults = getGlobalDefaults(ctx.db);
+      // Map generation: an explicit template/settings wins; otherwise fall back to the
+      // global default map template (creation-time snapshot).
       if (mapGenTemplateId) input.mapGen = ctx.mapGenTemplates.settingsOf(mapGenTemplateId);
+      else if (!input.mapGen && defaults.mapTemplateId) {
+        try {
+          input.mapGen = ctx.mapGenTemplates.settingsOf(defaults.mapTemplateId);
+        } catch {
+          /* template was deleted — ignore */
+        }
+      }
       const row = await manager.create(input);
+      // Default modpack (creation-time): apply best-effort when the wizard didn't set
+      // its own mods. A download failure doesn't fail creation — mods can be re-applied.
+      if (!input.mods?.length && defaults.modpackId) {
+        try {
+          await ctx.modpacks.apply(defaults.modpackId, row.id);
+        } catch (err) {
+          console.warn(`[create] default modpack apply failed for ${row.id}: ${(err as Error).message}`);
+        }
+      }
       res.status(201).json({ server: dtoOf(row) });
     }),
   );
@@ -164,6 +183,15 @@ export function serversRouter(ctx: AppContext): Router {
       const body = parse(z.object({ settings: z.record(z.string(), z.unknown()) }), req.body);
       const settings = await manager.updateSettings(req.params.id, body.settings);
       res.json({ settings });
+    }),
+  );
+
+  // Reset one cascading setting back to inheriting the global default.
+  r.post(
+    '/:id/settings/reset',
+    asyncHandler(async (req, res) => {
+      const body = parse(z.object({ setting: z.string().min(1) }), req.body);
+      res.json({ server: dtoOf(manager.resetSetting(req.params.id, body.setting)) });
     }),
   );
 

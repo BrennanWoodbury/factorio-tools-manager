@@ -103,6 +103,23 @@ const MIGRATIONS: Migration[] = [
     // to auto backups only, and this new column caps manual backups independently.
     up: (db) => db.exec('ALTER TABLE servers ADD COLUMN backup_keep_manual INTEGER NOT NULL DEFAULT 10'),
   },
+  {
+    version: 12,
+    // Global-default + per-server override: an `<col>_overridden` flag per cascading
+    // setting (auto_restart + backup config). 0 = inherits the global (and is pushed
+    // to on a global change); 1 = the server's own value, frozen until reset.
+    up: (db) => {
+      for (const col of [
+        'auto_restart',
+        'auto_backup',
+        'backup_interval_minutes',
+        'backup_keep',
+        'backup_keep_manual',
+      ]) {
+        db.exec(`ALTER TABLE servers ADD COLUMN ${col}_overridden INTEGER NOT NULL DEFAULT 0`);
+      }
+    },
+  },
 ];
 
 export function runMigrations(db: DB): void {

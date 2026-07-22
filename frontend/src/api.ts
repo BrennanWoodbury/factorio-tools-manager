@@ -4,6 +4,7 @@ import type {
   CatalogEntry,
   DnsSettings,
   FactorioAccount,
+  GlobalDefaults,
   MapGen,
   MapGenTemplate,
   MapGenTemplateDetail,
@@ -207,6 +208,13 @@ export const api = {
   getGlobalAdminlist: () => req<{ adminlist: string[] }>('GET', '/global/adminlist'),
   setGlobalAdminlist: (adminlist: string[]) =>
     req<{ adminlist: string[] }>('PUT', '/global/adminlist', { adminlist }),
+
+  // global server defaults (cascading, per-server overridable)
+  getGlobalDefaults: () => req<{ defaults: GlobalDefaults }>('GET', '/global/defaults'),
+  setGlobalDefaults: (patch: Partial<Omit<GlobalDefaults, 'modpackName' | 'mapTemplateName'>>) =>
+    req<{ defaults: GlobalDefaults }>('PUT', '/global/defaults', patch),
+  resetServerSetting: (id: string, setting: string) =>
+    req<{ server: Server }>('POST', `/servers/${id}/settings/reset`, { setting }),
 
   // global Factorio.com account (one account for every server)
   getFactorioAccount: () => req<{ factorio: FactorioAccount }>('GET', '/global/factorio'),

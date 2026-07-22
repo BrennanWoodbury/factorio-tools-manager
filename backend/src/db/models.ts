@@ -37,6 +37,12 @@ export interface ServerRow {
   backup_keep: number;
   /** Manual-backup retention (separate from auto). Migration v11. */
   backup_keep_manual: number;
+  /** Per-setting override flags (0 = inherits global default). Migration v12. */
+  auto_restart_overridden: number;
+  auto_backup_overridden: number;
+  backup_interval_minutes_overridden: number;
+  backup_keep_overridden: number;
+  backup_keep_manual_overridden: number;
   /** New-map generation settings (map-gen-settings.json). Nullable => image
    *  defaults. Applied when a new save is generated. Migration v10. */
   map_gen_settings_json: string | null;
@@ -68,6 +74,14 @@ export interface ServerDto {
   backupIntervalMinutes: number;
   backupKeep: number;
   backupKeepManual: number;
+  /** Which cascading settings are overridden on this server (vs inheriting global). */
+  overrides: {
+    autoRestart: boolean;
+    autoBackup: boolean;
+    backupIntervalMinutes: boolean;
+    backupKeep: boolean;
+    backupKeepManual: boolean;
+  };
   /** Resolved Docker image the server will run (repo:tag). */
   factorioImage?: string;
   /** Fully-qualified connect hostname players use, when DNS is enabled. */
@@ -102,6 +116,13 @@ export function toDto(
     backupIntervalMinutes: row.backup_interval_minutes,
     backupKeep: row.backup_keep,
     backupKeepManual: row.backup_keep_manual,
+    overrides: {
+      autoRestart: row.auto_restart_overridden === 1,
+      autoBackup: row.auto_backup_overridden === 1,
+      backupIntervalMinutes: row.backup_interval_minutes_overridden === 1,
+      backupKeep: row.backup_keep_overridden === 1,
+      backupKeepManual: row.backup_keep_manual_overridden === 1,
+    },
     factorioImage,
     connectHost,
   };

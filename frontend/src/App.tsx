@@ -6,10 +6,11 @@ import { ServerDetail } from './components/ServerDetail';
 import { ModpacksView } from './components/ModpacksView';
 import { ModpackDetail } from './components/ModpackDetail';
 import { MapGenTemplatesView } from './components/MapGenTemplatesView';
+import { DefaultsView } from './components/DefaultsView';
 import { NotificationsCenter } from './components/NotificationsCenter';
 import { Toaster } from './ui';
 
-type Tab = 'servers' | 'modpacks' | 'templates';
+type Tab = 'servers' | 'modpacks' | 'templates' | 'defaults';
 
 export function App() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -66,6 +67,9 @@ export function App() {
           <button className={tab === 'templates' ? 'primary' : 'ghost'} onClick={() => go('templates')}>
             Templates
           </button>
+          <button className={tab === 'defaults' ? 'primary' : 'ghost'} onClick={() => go('defaults')}>
+            Defaults
+          </button>
           <NotificationsCenter />
           <button
             className="ghost"
@@ -92,6 +96,7 @@ export function App() {
             <ModpacksView onOpen={setSelectedPack} />
           ))}
         {tab === 'templates' && <MapGenTemplatesView />}
+        {tab === 'defaults' && <DefaultsView />}
       </div>
       <Toaster />
     </>

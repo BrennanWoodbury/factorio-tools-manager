@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
-import type { BackupInfo, Server } from '../types';
+import type { BackupInfo, GlobalDefaults, Server } from '../types';
 import { run, toastError, toastSuccess } from '../ui';
+import { OverridableField } from './OverridableField';
 
 function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -11,14 +12,8 @@ function fmtSize(bytes: number): string {
 
 export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?: () => void }) {
   const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [defaults, setDefaults] = useState<GlobalDefaults | null>(null);
   const [busy, setBusy] = useState(false);
-
-  // Auto-backup settings (persisted via updateServer)
-  const [auto, setAuto] = useState(server.autoBackup);
-  const [interval, setIntervalMin] = useState(server.backupIntervalMinutes);
-  const [keep, setKeep] = useState(server.backupKeep);
-  const [keepManual, setKeepManual] = useState(server.backupKeepManual);
-  const [savingCfg, setSavingCfg] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -30,6 +25,7 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
 
   useEffect(() => {
     void load();
+    api.getGlobalDefaults().then((r) => setDefaults(r.defaults)).catch(() => {});
   }, [load]);
 
   const backupNow = async () => {
@@ -42,21 +38,13 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
     if (ok) void load();
   };
 
-  const saveCfg = async () => {
-    setSavingCfg(true);
-    await run(
-      () =>
-        api.updateServer(server.id, {
-          autoBackup: auto,
-          backupIntervalMinutes: interval,
-          backupKeep: keep,
-          backupKeepManual: keepManual,
-        }),
-      'Backup settings saved',
+  // Per-field override: editing commits an override, the reset button re-inherits.
+  const commit = (patch: Record<string, unknown>) =>
+    run(() => api.updateServer(server.id, patch), 'Saved').then((ok) => ok && onChanged?.());
+  const reset = (setting: string) =>
+    run(() => api.resetServerSetting(server.id, setting), 'Reset to global default').then(
+      (ok) => ok && onChanged?.(),
     );
-    setSavingCfg(false);
-    onChanged?.();
-  };
 
   return (
     <div className="panel">
@@ -72,51 +60,50 @@ export function BackupsPanel({ server, onChanged }: { server: Server; onChanged?
         retention — one never evicts the other, and a manual backup doesn't delay the auto schedule.
       </div>
 
-      {/* Backup settings */}
-      <div className="row" style={{ alignItems: 'flex-end', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
-          <input
-            type="checkbox"
-            style={{ width: 'auto' }}
-            checked={auto}
-            onChange={(e) => setAuto(e.target.checked)}
+      {/* Backup settings — each field inherits the global default until overridden. */}
+      {defaults && (
+        <div style={{ marginBottom: 6, maxWidth: 480 }}>
+          <OverridableField
+            label="Automatic backups"
+            kind="bool"
+            value={server.autoBackup}
+            globalValue={defaults.autoBackup}
+            overridden={server.overrides.autoBackup}
+            onCommit={(v) => void commit({ autoBackup: v })}
+            onReset={() => void reset('autoBackup')}
           />
-          Automatic backups
-        </label>
-        <div>
-          <label>Every (minutes)</label>
-          <input
-            type="number"
+          <OverridableField
+            label="Every (minutes)"
+            kind="number"
             min={5}
-            style={{ width: 100 }}
-            value={interval}
-            onChange={(e) => setIntervalMin(Number(e.target.value))}
+            value={server.backupIntervalMinutes}
+            globalValue={defaults.backupIntervalMinutes}
+            overridden={server.overrides.backupIntervalMinutes}
+            onCommit={(v) => void commit({ backupIntervalMinutes: v })}
+            onReset={() => void reset('backupIntervalMinutes')}
           />
-        </div>
-        <div>
-          <label>Keep auto (N)</label>
-          <input
-            type="number"
+          <OverridableField
+            label="Keep auto (newest N)"
+            kind="number"
             min={1}
-            style={{ width: 100 }}
-            value={keep}
-            onChange={(e) => setKeep(Number(e.target.value))}
+            value={server.backupKeep}
+            globalValue={defaults.backupKeep}
+            overridden={server.overrides.backupKeep}
+            onCommit={(v) => void commit({ backupKeep: v })}
+            onReset={() => void reset('backupKeep')}
           />
-        </div>
-        <div>
-          <label>Keep manual (N)</label>
-          <input
-            type="number"
+          <OverridableField
+            label="Keep manual (newest N)"
+            kind="number"
             min={1}
-            style={{ width: 100 }}
-            value={keepManual}
-            onChange={(e) => setKeepManual(Number(e.target.value))}
+            value={server.backupKeepManual}
+            globalValue={defaults.backupKeepManual}
+            overridden={server.overrides.backupKeepManual}
+            onCommit={(v) => void commit({ backupKeepManual: v })}
+            onReset={() => void reset('backupKeepManual')}
           />
         </div>
-        <button disabled={savingCfg} onClick={() => void saveCfg()}>
-          {savingCfg ? 'Saving…' : 'Save settings'}
-        </button>
-      </div>
+      )}
 
       {backups.length === 0 ? (
         <div className="small muted" style={{ marginTop: 12 }}>

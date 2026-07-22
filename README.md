@@ -129,6 +129,11 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Factorio.com account:** one global account (username + token), set on the Servers dashboard,
   used by **every** server for mod-portal downloads and the public server listing. There are no
   per-server credentials.
+- **Server defaults (cascade):** a **Defaults** tab sets global defaults for auto-restart and backup
+  config. These **cascade**: saving pushes the new value to every server that hasn't overridden it;
+  a server that overrode a setting keeps its own value until you click **"Reset to global default"**
+  on that field. New servers start out inheriting everything. Also sets a default **modpack** and
+  **map template** applied to new servers at creation (changeable in the wizard).
 - **Lifecycle:** start / stop / restart / delete. Delete removes the container, DNS record,
   releases the ports and deletes the data dir.
 - **Console:** live RCON console + player list (over loopback / Docker network only).

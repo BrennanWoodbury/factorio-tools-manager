@@ -9,6 +9,7 @@ import { DnsService } from './dnsService.js';
 import { RconService } from './rconService.js';
 import { serverFiles, sanitizeName, type ModEntry } from './serverFiles.js';
 import { getFactorioAccount } from './factorioAccount.js';
+import { CASCADE, getGlobalDefaults, resetServerSetting, type CascadeDef } from './globalDefaults.js';
 import { DockerError, DuplicateSubdomainError, NotFoundError, ValidationError } from '../lib/errors.js';
 
 export interface CreateServerInput {
@@ -100,6 +101,9 @@ export class ServerManager {
     const id = randomUUID().slice(0, 8);
     const rconPassword = randomBytes(18).toString('base64url');
     const saveName = input.saveName?.trim() || 'default';
+    // New servers inherit every cascading setting from the current global defaults
+    // (overridden flags all 0).
+    const g = getGlobalDefaults(this.db);
 
     const baseRow: ServerRow = {
       id,
@@ -123,13 +127,18 @@ export class ServerManager {
       applied_modpack_id: null,
       whitelist_json: null,
       factorio_tag: this.cleanTag(input.factorioTag),
-      auto_restart: input.autoRestart ? 1 : 0,
+      auto_restart: g.autoRestart ? 1 : 0,
       adminlist_json: null,
       desired_state: 'stopped',
-      auto_backup: 0,
-      backup_interval_minutes: 15,
-      backup_keep: 10,
-      backup_keep_manual: 10,
+      auto_backup: g.autoBackup ? 1 : 0,
+      backup_interval_minutes: g.backupIntervalMinutes,
+      backup_keep: g.backupKeep,
+      backup_keep_manual: g.backupKeepManual,
+      auto_restart_overridden: 0,
+      auto_backup_overridden: 0,
+      backup_interval_minutes_overridden: 0,
+      backup_keep_overridden: 0,
+      backup_keep_manual_overridden: 0,
       map_gen_settings_json:
         input.mapGen && Object.keys(input.mapGen).length > 0 ? JSON.stringify(input.mapGen) : null,
       map_settings_json: null,
@@ -200,21 +209,23 @@ export class ServerManager {
       const tag = this.cleanTag(input.factorioTag);
       if (tag !== (current.factorio_tag ?? '')) set('factorio_tag', tag, true);
     }
-    if (input.autoRestart !== undefined) {
-      const ar = input.autoRestart ? 1 : 0;
-      if (ar !== current.auto_restart) set('auto_restart', ar, false); // toggling it isn't restart-worthy
+    // Cascading settings (auto_restart + backup config): explicitly setting one marks
+    // it overridden, so it stops tracking the global default until reset. Never
+    // restart-worthy (auto_restart toggling and backup config apply without a restart).
+    const cascadeInput: Record<CascadeDef['key'], number | boolean | undefined> = {
+      autoRestart: input.autoRestart,
+      autoBackup: input.autoBackup,
+      backupIntervalMinutes: input.backupIntervalMinutes,
+      backupKeep: input.backupKeep,
+      backupKeepManual: input.backupKeepManual,
+    };
+    for (const def of CASCADE) {
+      const v = cascadeInput[def.key];
+      if (v === undefined) continue;
+      const num = def.type === 'bool' ? (v ? 1 : 0) : Math.max(def.min ?? 0, Math.floor(Number(v)));
+      set(def.col, num, false);
+      set(def.ovr, 1, false); // an explicit edit overrides the global
     }
-    // Backup config — never requires a game restart.
-    if (input.autoBackup !== undefined) {
-      const ab = input.autoBackup ? 1 : 0;
-      if (ab !== current.auto_backup) set('auto_backup', ab, false);
-    }
-    if (input.backupIntervalMinutes !== undefined && input.backupIntervalMinutes !== current.backup_interval_minutes)
-      set('backup_interval_minutes', Math.max(5, Math.floor(input.backupIntervalMinutes)), false);
-    if (input.backupKeep !== undefined && input.backupKeep !== current.backup_keep)
-      set('backup_keep', Math.max(1, Math.floor(input.backupKeep)), false);
-    if (input.backupKeepManual !== undefined && input.backupKeepManual !== current.backup_keep_manual)
-      set('backup_keep_manual', Math.max(1, Math.floor(input.backupKeepManual)), false);
 
     let subdomainChanged = false;
     if (input.subdomain !== undefined && input.subdomain !== current.subdomain) {
@@ -235,6 +246,16 @@ export class ServerManager {
     }
     await this.maybeAutoRestart(id, restartRelevantChanged);
     return updated;
+  }
+
+  /**
+   * Reset one cascading setting back to inheriting the global default (value =
+   * current global, overridden flag = 0). Applies without a restart.
+   */
+  resetSetting(id: string, key: string): ServerRow {
+    this.get(id); // 404 if unknown
+    resetServerSetting(this.db, id, key);
+    return this.get(id);
   }
 
   /**
