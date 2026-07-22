@@ -100,6 +100,26 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
 .tab { padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--muted); }
 .tab.active { color: var(--text); border-bottom-color: var(--accent); }
 
+/* Settings page: left rail + content */
+.settings-layout { display: grid; grid-template-columns: 210px 1fr; gap: 22px; align-items: start; }
+.settings-rail { position: sticky; top: 22px; display: flex; flex-direction: column; gap: 18px; }
+.settings-rail .grp { display: flex; flex-direction: column; gap: 2px; }
+.settings-rail .grp-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); margin: 0 0 6px; padding: 0 10px;
+}
+.settings-nav-item {
+  text-align: left; background: transparent; border: 1px solid transparent;
+  color: var(--muted); padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.settings-nav-item:hover { border-color: var(--border); color: var(--text); }
+.settings-nav-item.active { background: var(--panel-2); color: var(--text); border-color: var(--border); }
+.settings-content { min-width: 0; }
+@media (max-width: 760px) {
+  .settings-layout { grid-template-columns: 1fr; }
+  .settings-rail { position: static; }
+}
+
 .console {
   background: #0d0f13; border: 1px solid var(--border); border-radius: 6px;
   padding: 12px; height: 340px; overflow-y: auto; white-space: pre-wrap;

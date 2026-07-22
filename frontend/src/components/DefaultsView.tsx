@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import type { GlobalDefaults, MapGenTemplate, Modpack } from '../types';
 import { run, toastError } from '../ui';
-import { GlobalAdvancedSettings } from './GlobalAdvancedSettings';
 
 /**
- * Global server defaults. The scalar settings (auto-restart + backup config) cascade:
- * saving pushes the new value to every server that hasn't overridden it. The default
- * modpack / map template are creation-time — applied to new servers only.
+ * Global server defaults — the "Server defaults" subsection of the Settings page.
+ * The scalar settings (auto-restart + backup config) cascade: saving pushes the new
+ * value to every server that hasn't overridden it. The default modpack / map template
+ * are creation-time — applied to new servers only.
  */
 export function DefaultsView() {
   const [d, setD] = useState<GlobalDefaults | null>(null);
@@ -160,8 +160,6 @@ export function DefaultsView() {
           ))}
         </select>
       </div>
-
-      <GlobalAdvancedSettings />
     </>
   );
 }

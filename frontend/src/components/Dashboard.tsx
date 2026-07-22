@@ -3,9 +3,6 @@ import { api } from '../api';
 import type { Server, ServerStatus, SystemStatus } from '../types';
 import { CreateServerForm } from './CreateServerForm';
 import { StatusBadge } from './StatusBadge';
-import { WhitelistPanel } from './WhitelistPanel';
-import { DnsSettingsPanel } from './DnsSettingsPanel';
-import { FactorioAccountPanel } from './FactorioAccountPanel';
 import { LifecycleControls } from './LifecycleControls';
 
 export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
@@ -79,46 +76,6 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
           </div>
         );
       })}
-
-      <details style={{ marginTop: 18 }}>
-        <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
-          Factorio.com account (applies to every server)
-        </summary>
-        <FactorioAccountPanel />
-      </details>
-
-      <details style={{ marginTop: 8 }}>
-        <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
-          DNS / Cloudflare settings
-        </summary>
-        <DnsSettingsPanel />
-      </details>
-
-      <details style={{ marginTop: 8 }}>
-        <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
-          Global whitelist (applies to every server)
-        </summary>
-        <WhitelistPanel
-          title="Global whitelist"
-          description="These Factorio usernames may join every server, on top of each server's own whitelist. Leave empty to disable. Applies to each server on its next start/restart."
-          load={async () => (await api.getGlobalWhitelist()).whitelist}
-          save={async (names) => (await api.setGlobalWhitelist(names)).whitelist}
-        />
-      </details>
-
-      <details style={{ marginTop: 8 }}>
-        <summary className="muted" style={{ cursor: 'pointer', marginBottom: 10 }}>
-          Global admin list (admins on every server)
-        </summary>
-        <WhitelistPanel
-          title="Global admins"
-          description="These Factorio usernames are admins on every server, on top of each server's own admin list. Applies to each server on its next start/restart."
-          addLabel="+ Add admin"
-          hint={(n) => (n === 0 ? 'No global admins.' : `${n} admin${n === 1 ? '' : 's'}.`)}
-          load={async () => (await api.getGlobalAdminlist()).adminlist}
-          save={async (names) => (await api.setGlobalAdminlist(names)).adminlist}
-        />
-      </details>
 
       {showCreate && (
         <CreateServerForm
