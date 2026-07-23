@@ -5,6 +5,7 @@ import { run, toastError, toastSuccess } from '../ui';
 import { MapGenEditor } from './MapGenEditor';
 import { MapPreview } from './MapPreview';
 import { GameModeSelect } from './GameModeSelect';
+import { Collapsible } from './Collapsible';
 
 export function MapGenPanel({ server }: { server: Server }) {
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
@@ -132,11 +133,12 @@ export function MapGenPanel({ server }: { server: Server }) {
       </div>
 
       {/* Import / export exchange strings */}
-      <details style={{ marginBottom: 14 }}>
-        <summary className="muted" style={{ cursor: 'pointer' }}>
-          Import / export a map exchange string
-        </summary>
-        <div className="small muted" style={{ margin: '8px 0' }}>
+      <Collapsible
+        title="Import / export a map exchange string"
+        hint="Paste a string to load its settings, or export the current ones to share"
+        style={{ marginBottom: 14 }}
+      >
+        <div className="small muted" style={{ marginBottom: 8 }}>
           Paste a <span className="mono">&gt;&gt;&gt;…&lt;&lt;&lt;</span> string from Factorio's map
           generator (needs the same Factorio version and mods as this server). It populates the
           sliders below and attaches its map settings.
@@ -162,7 +164,7 @@ export function MapGenPanel({ server }: { server: Server }) {
             <textarea readOnly rows={3} className="mono" value={exported} onClick={(e) => (e.target as HTMLTextAreaElement).select()} />
           </div>
         )}
-      </details>
+      </Collapsible>
 
       <div style={{ marginBottom: 12 }}>
         <GameModeSelect value={mode} onChange={(m) => void changeMode(m)} />
@@ -181,13 +183,14 @@ export function MapGenPanel({ server }: { server: Server }) {
       <MapGenEditor value={mapGen} onChange={setMapGen} mode={mode} />
 
       {/* Advanced raw-JSON escape hatch */}
-      <details style={{ marginTop: 12 }} onToggle={(e) => openAdvanced((e.target as HTMLDetailsElement).open)}>
-        <summary className="muted" style={{ cursor: 'pointer' }}>
-          Advanced — edit raw map-gen-settings JSON
-        </summary>
-        <div className="small muted" style={{ margin: '8px 0' }}>
-          Full escape hatch for anything the sliders don't cover. Applying updates the editor; Save
-          persists it.
+      <Collapsible
+        title="Advanced — raw map-gen-settings JSON"
+        hint="Escape hatch for anything the sliders don't cover"
+        onOpenChange={openAdvanced}
+        style={{ marginTop: 12 }}
+      >
+        <div className="small muted" style={{ marginBottom: 8 }}>
+          Applying updates the editor; Save persists it.
         </div>
         <textarea
           rows={12}
@@ -204,7 +207,7 @@ export function MapGenPanel({ server }: { server: Server }) {
         <div className="row" style={{ marginTop: 8 }}>
           <button onClick={applyAdvanced}>Apply JSON to editor</button>
         </div>
-      </details>
+      </Collapsible>
     </div>
   );
 }

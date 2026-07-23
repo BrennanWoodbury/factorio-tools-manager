@@ -6,6 +6,7 @@ import { FactorioTagSelect } from './FactorioTagSelect';
 import { MapGenEditor } from './MapGenEditor';
 import { DnsNamePreview } from './DnsNamePreview';
 import { GameModeSelect } from './GameModeSelect';
+import { Collapsible } from './Collapsible';
 
 const MODES: { source: DraftSource; icon: string; title: string; blurb: string }[] = [
   {
@@ -268,25 +269,24 @@ export function CreateServerForm({
                 <div style={{ marginTop: 12 }}>
                   <GameModeSelect value={gameMode} onChange={setGameMode} />
                 </div>
-                <details
-                  style={{ marginTop: 12 }}
-                  onToggle={(e) => {
-                    if ((e.target as HTMLDetailsElement).open) void initMapGen();
+                <Collapsible
+                  title="Map generation"
+                  hint="Optional — tune ore, water & terrain. Closed uses the game's defaults."
+                  onOpenChange={(open) => {
+                    if (open) void initMapGen();
                   }}
+                  style={{ marginTop: 12 }}
                 >
-                  <summary className="muted" style={{ cursor: 'pointer' }}>
-                    Map generation (optional — tune ore/water/terrain)
-                  </summary>
-                  <div className="small muted" style={{ margin: '8px 0' }}>
-                    Applied when this server generates its first map. Leave collapsed for the game's
-                    defaults. A live preview lands in a follow-up.
+                  <div className="small muted" style={{ marginBottom: 10 }}>
+                    Applied when this server generates its first map. A live preview lands in a
+                    follow-up.
                   </div>
                   {mapGen ? (
                     <MapGenEditor value={mapGen} onChange={setMapGen} mode={gameMode} />
                   ) : (
                     <div className="muted small">Loading defaults…</div>
                   )}
-                </details>
+                </Collapsible>
               </>
             )}
 
