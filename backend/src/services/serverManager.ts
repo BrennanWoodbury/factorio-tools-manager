@@ -969,7 +969,24 @@ export class ServerManager {
       '--map-gen-settings',
       settingsPath,
     ];
-    if (opts.planet) args.push('--map-preview-planet', opts.planet);
+    // Non-Nauvis planets (Vulcanus, Fulgora, …) only exist with Space Age loaded, so
+    // enable it per game mode and mount the mod dir. Nauvis previews keep the original
+    // bundled-defaults path untouched (no regression).
+    const planet = opts.planet;
+    if (planet && planet !== 'nauvis') {
+      const enablement = spaceAgeModEnablement(row.game_mode);
+      if (enablement) {
+        const modList = serverFiles.readModList(id);
+        for (const [name, enabled] of Object.entries(enablement)) {
+          const e = modList.find((m) => m.name === name);
+          if (e) e.enabled = enabled;
+          else modList.push({ name, enabled });
+        }
+        serverFiles.writeModList(id, modList);
+      }
+      args.push('--mod-directory', '/factorio/mods');
+    }
+    if (planet) args.push('--map-preview-planet', planet);
     if (opts.seed !== undefined && Number.isFinite(opts.seed)) args.push('--map-gen-seed', String(Math.floor(opts.seed)));
     const { exitCode, logs } = await this.docker.runOneShot(row, serverFiles.hostDir(id), args, 90_000);
     if (exitCode !== 0) {

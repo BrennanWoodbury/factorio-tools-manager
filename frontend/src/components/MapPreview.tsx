@@ -2,17 +2,30 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { MapGenSettings } from '../types';
 import { toastError } from '../ui';
+import { previewPlanetsForMode } from './MapGenEditor';
 
 /**
  * Renders a map preview PNG for the given (unsaved) settings via a backend one-shot.
- * Shows a thumbnail; click it to expand full-res in a lightbox. "Reroll" previews a
- * fresh random seed.
+ * For Space Age, each planet (Nauvis, Vulcanus, Fulgora, …) can be previewed; the world
+ * seed is held across planets so they show the same world. Click the image to expand;
+ * "Reroll" previews a fresh random seed.
  */
-export function MapPreview({ serverId, mapGen }: { serverId: string; mapGen: MapGenSettings }) {
+export function MapPreview({
+  serverId,
+  mapGen,
+  mode = 'vanilla',
+}: {
+  serverId: string;
+  mapGen: MapGenSettings;
+  mode?: string;
+}) {
+  const planets = previewPlanetsForMode(mode);
+  const [planet, setPlanet] = useState('nauvis');
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const urlRef = useRef<string | null>(null);
+  const seedRef = useRef<number | undefined>(undefined);
 
   // Revoke the previous object URL whenever it changes / on unmount.
   useEffect(() => {
@@ -22,11 +35,13 @@ export function MapPreview({ serverId, mapGen }: { serverId: string; mapGen: Map
     };
   }, [url]);
 
-  const generate = async (seed?: number) => {
+  const generate = async (which: string, seed?: number) => {
     setBusy(true);
+    if (seed !== undefined) seedRef.current = seed;
     try {
-      const blob = await api.previewMap(serverId, { mapGen, seed, size: 1024 });
+      const blob = await api.previewMap(serverId, { mapGen, planet: which, seed: seedRef.current, size: 1024 });
       setUrl(URL.createObjectURL(blob));
+      setPlanet(which);
     } catch (err) {
       toastError((err as Error).message);
     } finally {
@@ -34,18 +49,38 @@ export function MapPreview({ serverId, mapGen }: { serverId: string; mapGen: Map
     }
   };
 
+  const activeLabel = planets.find((p) => p.key === planet)?.label ?? 'Nauvis';
+
   return (
     <div style={{ marginBottom: 12 }}>
+      {planets.length > 1 && (
+        <div className="row" style={{ gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+          {planets.map((p) => (
+            <button
+              key={p.key}
+              className={p.key === planet ? 'primary small' : 'ghost small'}
+              disabled={busy}
+              onClick={() => void generate(p.key)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="row" style={{ alignItems: 'center', gap: 10 }}>
-        <button disabled={busy} onClick={() => void generate()}>
+        <button disabled={busy} onClick={() => void generate(planet)}>
           {busy ? 'Rendering…' : url ? 'Refresh preview' : 'Preview map'}
         </button>
         {url && (
-          <button className="ghost small" disabled={busy} onClick={() => void generate(Math.floor(Math.random() * 2 ** 31))}>
+          <button
+            className="ghost small"
+            disabled={busy}
+            onClick={() => void generate(planet, Math.floor(Math.random() * 2 ** 31))}
+          >
             🎲 Reroll seed
           </button>
         )}
-        <span className="small muted">Nauvis · renders your current (unsaved) settings</span>
+        <span className="small muted">{activeLabel} · renders your current (unsaved) settings</span>
       </div>
 
       {url && (

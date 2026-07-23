@@ -450,7 +450,7 @@ export function CreateServerForm({
                   </div>
                   {mapGen ? (
                     <>
-                      {draftId && <MapPreview serverId={draftId} mapGen={mapGen} />}
+                      {draftId && <MapPreview serverId={draftId} mapGen={mapGen} mode={gameMode} />}
                       <MapGenEditor
                         value={mapGen}
                         onChange={(v) => {
@@ -525,7 +525,7 @@ export function CreateServerForm({
                     </div>
                     <GameModeSelect value={gameMode} onChange={setGameMode} />
                     <div style={{ marginTop: 12 }}>
-                      {draftId && <MapPreview serverId={draftId} mapGen={mapGen} />}
+                      {draftId && <MapPreview serverId={draftId} mapGen={mapGen} mode={gameMode} />}
                       <MapGenEditor
                         value={mapGen}
                         onChange={(v) => {

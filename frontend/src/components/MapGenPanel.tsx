@@ -179,7 +179,7 @@ export function MapGenPanel({ server }: { server: Server }) {
           </div>
         )}
       </div>
-      <MapPreview serverId={server.id} mapGen={mapGen} />
+      <MapPreview serverId={server.id} mapGen={mapGen} mode={mode} />
       <MapGenEditor value={mapGen} onChange={setMapGen} mode={mode} />
 
       {/* Advanced raw-JSON escape hatch */}

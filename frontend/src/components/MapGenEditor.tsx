@@ -155,6 +155,16 @@ function planetsForMode(mode: string): Planet[] {
   return PLANETS; // space_age + space_age_no_quality — same planets
 }
 
+/**
+ * Planets that can be previewed for a mode: Nauvis for vanilla, all Space Age planets
+ * for SA. Modded packs are Nauvis-only (we can't know a pack's surfaces), matching
+ * "Vanilla + Space Age at least".
+ */
+export function previewPlanetsForMode(mode: string): { key: string; label: string }[] {
+  if (mode === 'modded') return [{ key: 'nauvis', label: 'Nauvis' }];
+  return planetsForMode(mode).map((p) => ({ key: p.key, label: p.label }));
+}
+
 /** Turn an autoplace-control name into a readable label (e.g. tungsten_ore → Tungsten ore). */
 function prettify(key: string): string {
   const s = key.replace(/[-_]/g, ' ').trim();
