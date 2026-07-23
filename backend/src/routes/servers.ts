@@ -197,6 +197,7 @@ export function serversRouter(ctx: AppContext): Router {
       } catch {
         /* ignore */
       }
+      const { start } = parse(z.object({ start: z.boolean().optional() }), req.body ?? {});
       const row = await manager.finalize(req.params.id);
       // Default modpack (creation-time) when the draft chose no mods — mirrors POST /.
       const defaults = getGlobalDefaults(ctx.db);
@@ -207,7 +208,90 @@ export function serversRouter(ctx: AppContext): Router {
           console.warn(`[finalize] default modpack apply failed for ${row.id}: ${(err as Error).message}`);
         }
       }
-      res.status(201).json({ server: dtoOf(row) });
+      let started = false;
+      if (start) {
+        try {
+          await manager.start(row.id);
+          started = true;
+        } catch (err) {
+          console.warn(`[finalize] auto-start failed for ${row.id}: ${(err as Error).message}`);
+        }
+      }
+      res.status(201).json({ server: dtoOf(manager.get(row.id)), started });
+    }),
+  );
+
+  // Test & Create: stream a pre-flight boot probe (SSE), then — only if it passes —
+  // finalize the draft into a real server. Events: status | log | failed | done.
+  r.get(
+    '/draft/:id/test-create',
+    asyncHandler(async (req, res) => {
+      const id = req.params.id;
+      const draft = manager.getDraft(id); // 404 unless a draft
+      const start = req.query.start === '1';
+      let mods: DraftState['mods'];
+      try {
+        if (draft.draft_state_json) mods = (JSON.parse(draft.draft_state_json) as DraftState).mods;
+      } catch {
+        /* ignore */
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      const send = (event: string, data: unknown) =>
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      const heartbeat = setInterval(() => res.write(': ping\n\n'), 15_000);
+      let aborted = false;
+      req.on('close', () => {
+        aborted = true;
+      });
+
+      try {
+        send('status', { message: 'Preparing…' });
+        // Apply the default modpack up front so the probe tests the real mod set.
+        const defaults = getGlobalDefaults(ctx.db);
+        if (!mods?.length && defaults.modpackId) {
+          send('status', { message: 'Downloading default modpack…' });
+          try {
+            await ctx.modpacks.apply(defaults.modpackId, id);
+          } catch (err) {
+            send('log', { line: `Default modpack apply failed: ${(err as Error).message}` });
+          }
+        }
+
+        const result = await manager.probeDraft(id, {
+          line: (line) => !aborted && send('log', { line }),
+          status: (message) => !aborted && send('status', { message }),
+        });
+        if (aborted) return;
+        if (!result.ok) {
+          send('failed', { errors: result.errors });
+          return;
+        }
+
+        send('status', { message: 'Test passed — creating server…' });
+        const row = await manager.finalize(id);
+        let started = false;
+        if (start) {
+          send('status', { message: 'Starting server…' });
+          try {
+            await manager.start(row.id);
+            started = true;
+          } catch (err) {
+            send('log', { line: `Start failed: ${(err as Error).message}` });
+          }
+        }
+        send('done', { server: dtoOf(manager.get(row.id)), started });
+      } catch (err) {
+        send('failed', { errors: [(err as Error).message] });
+      } finally {
+        clearInterval(heartbeat);
+        res.end();
+      }
     }),
   );
 

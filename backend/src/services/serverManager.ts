@@ -24,6 +24,18 @@ function extractMarker(logs: string): string | undefined {
   return m ? m[1].trim() : undefined;
 }
 
+/** Pull the human-useful failure lines out of a probe log (mod/dependency/settings
+ *  errors), stripping Factorio's leading timestamp. Deduped, last dozen. */
+function extractProbeErrors(logs: string): string[] {
+  const out: string[] = [];
+  for (const raw of logs.split('\n')) {
+    if (!/error|failed|missing|dependenc|incompatib|cannot|conflict|invalid/i.test(raw)) continue;
+    if (/\b0 errors\b/i.test(raw)) continue;
+    out.push(raw.replace(/^\s*\d+\.\d+\s+/, '').trim());
+  }
+  return [...new Set(out)].slice(-12);
+}
+
 export interface CreateServerInput {
   name: string;
   subdomain: string;
@@ -401,6 +413,82 @@ export class ServerManager {
       throw err;
     }
     return row;
+  }
+
+  /**
+   * Pre-flight "Test & Create" boot probe for a Generate draft: generate the map with
+   * the real mods (catches map-gen + mod-load failures), then boot `--start-server`
+   * isolated (public listing off, no host ports) and watch for the hosting-ready line
+   * (catches runtime/mod-conflict failures). Streams log lines + coarse status via
+   * `emit`. On success, pins the tested save so start() loads exactly what was verified.
+   */
+  async probeDraft(
+    id: string,
+    emit: { line?: (l: string) => void; status?: (s: string) => void } = {},
+  ): Promise<{ ok: boolean; errors: string[] }> {
+    const row = this.getDraft(id);
+    serverFiles.ensureDirs(id);
+    serverFiles.writeServerSettings(row, getGlobalAdvancedSettings(this.db));
+    // Apply the game mode's Space Age enablement to the mod list (as start() does).
+    const enablement = spaceAgeModEnablement(row.game_mode);
+    if (enablement) {
+      const modList = serverFiles.readModList(id);
+      for (const [name, enabled] of Object.entries(enablement)) {
+        const e = modList.find((m) => m.name === name);
+        if (e) e.enabled = enabled;
+        else modList.push({ name, enabled });
+      }
+      serverFiles.writeModList(id, modList);
+    }
+    serverFiles.writeMapGenSettings(row);
+
+    const saveName = sanitizeName(row.save_name || 'default');
+    const savePath = `/factorio/saves/${saveName}.zip`;
+    const probeSettings = serverFiles.writeProbeServerSettings(id);
+    const onLine = emit.line;
+
+    // 1) Generate the map with the real mods — catches map-gen + mod-load failures.
+    if (!serverFiles.saveExists(id, saveName)) {
+      emit.status?.('Generating map…');
+      const genArgs = ['--create', savePath, '--mod-directory', '/factorio/mods'];
+      if (row.map_gen_settings_json)
+        genArgs.push('--map-gen-settings', '/factorio/config/map-gen-settings.json');
+      if (row.map_settings_json)
+        genArgs.push('--map-settings', '/factorio/config/map-settings.json');
+      const gen = await this.docker.runProbe(row, serverFiles.hostDir(id), genArgs, { onLine });
+      if (gen.exitCode !== 0 || !serverFiles.saveExists(id, saveName)) {
+        const errs = extractProbeErrors(gen.logs);
+        return {
+          ok: false,
+          errors: errs.length ? errs : [`Map generation failed (exit ${gen.exitCode ?? '?'}).`],
+        };
+      }
+    }
+
+    // 2) Boot the generated save — catches hosting/runtime failures.
+    emit.status?.('Booting server to test…');
+    const boot = await this.docker.runProbe(
+      row,
+      serverFiles.hostDir(id),
+      ['--start-server', savePath, '--server-settings', probeSettings, '--mod-directory', '/factorio/mods'],
+      {
+        readyPatterns: [/Hosting game/i, /Starting RCON/i, /changing state from\(CreatingGame\) to\(InGame\)/i],
+        onLine,
+      },
+    );
+    if (!boot.matched) {
+      if (boot.timedOut)
+        return { ok: false, errors: ['Timed out waiting for the server to reach "hosting" — see the log above.'] };
+      const errs = extractProbeErrors(boot.logs);
+      return {
+        ok: false,
+        errors: errs.length ? errs : [`Server exited (code ${boot.exitCode ?? '?'}) before it started hosting.`],
+      };
+    }
+
+    // Success: pin the tested save so start() loads exactly what we verified.
+    this.repo.update(id, { generate_new_save: 0, save_name: saveName } as never);
+    return { ok: true, errors: [] };
   }
 
   /** Delete drafts past their TTL (row + on-disk dir). Runs on an interval. */

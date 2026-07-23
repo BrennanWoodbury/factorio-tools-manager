@@ -71,7 +71,23 @@ export function CreateServerForm({
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [confirmChange, setConfirmChange] = useState(false);
+  const [startAfter, setStartAfter] = useState(false);
+  const [probe, setProbe] = useState<{
+    phase: 'idle' | 'running' | 'failed';
+    status: string;
+    log: string[];
+    errors: string[];
+  }>({ phase: 'idle', status: '', log: [], errors: [] });
   const finalized = useRef(false);
+  const esRef = useRef<EventSource | null>(null);
+  const logBoxRef = useRef<HTMLDivElement>(null);
+
+  // Close the probe stream if the wizard unmounts mid-test.
+  useEffect(() => () => esRef.current?.close(), []);
+  // Auto-scroll the probe log as lines arrive.
+  useEffect(() => {
+    logBoxRef.current?.scrollTo(0, logBoxRef.current.scrollHeight);
+  }, [probe.log]);
 
   // Whether the form holds anything worth warning about before discarding on "Change".
   // (Loading map-gen defaults by opening the drawer doesn't count — only real edits.)
@@ -182,7 +198,7 @@ export function CreateServerForm({
     setCreating(true);
     try {
       await api.updateDraft(draftId, patch); // flush latest field values first
-      const { server } = await api.finalizeDraft(draftId);
+      const { server } = await api.finalizeDraft(draftId, startAfter);
       finalized.current = true;
       toastSuccess(`Created "${server.name}"`);
       onCreated(server.id);
@@ -192,6 +208,53 @@ export function CreateServerForm({
       setCreating(false);
     }
   };
+
+  // Test & Create: stream a pre-flight boot probe, then create only if it passes.
+  const testAndCreate = async () => {
+    if (!draftId) return;
+    try {
+      await api.updateDraft(draftId, patch); // flush latest field values first
+    } catch (err) {
+      toastError((err as Error).message);
+      return;
+    }
+    setProbe({ phase: 'running', status: 'Starting test…', log: [], errors: [] });
+    const es = new EventSource(
+      `/api/servers/draft/${draftId}/test-create?start=${startAfter ? 1 : 0}`,
+      { withCredentials: true },
+    );
+    esRef.current = es;
+    es.addEventListener('status', (e) => {
+      const { message } = JSON.parse((e as MessageEvent).data) as { message: string };
+      setProbe((p) => ({ ...p, status: message }));
+    });
+    es.addEventListener('log', (e) => {
+      const { line } = JSON.parse((e as MessageEvent).data) as { line: string };
+      setProbe((p) => ({ ...p, log: [...p.log, line].slice(-600) }));
+    });
+    es.addEventListener('failed', (e) => {
+      const { errors } = JSON.parse((e as MessageEvent).data) as { errors: string[] };
+      setProbe((p) => ({ ...p, phase: 'failed', status: 'Test failed', errors }));
+      es.close();
+    });
+    es.addEventListener('done', (e) => {
+      const { server } = JSON.parse((e as MessageEvent).data) as { server: { id: string; name: string } };
+      finalized.current = true;
+      es.close();
+      toastSuccess(`Created "${server.name}"`);
+      onCreated(server.id);
+    });
+    es.onerror = () => {
+      es.close();
+      setProbe((p) =>
+        p.phase === 'running'
+          ? { ...p, phase: 'failed', status: 'Connection lost', errors: [...p.errors, 'Lost connection to the test stream.'] }
+          : p,
+      );
+    };
+  };
+
+  const resetProbe = () => setProbe({ phase: 'idle', status: '', log: [], errors: [] });
 
   // Import/save flows can't finalize yet (decode / upload land in later slices).
   const finalizeReady = source === 'generate';
@@ -364,24 +427,88 @@ export function CreateServerForm({
               </div>
             )}
 
-            <div className="row" style={{ marginTop: 18, justifyContent: 'space-between' }}>
-              <span className="small muted" style={{ alignSelf: 'center' }}>
-                Saved as a draft — close to resume later from “Continue new server”.
-              </span>
-              <div className="row">
-                <button className="danger ghost" onClick={() => void discard()}>
-                  Discard
-                </button>
-                <button
-                  className="primary"
-                  disabled={creating || !canCreate}
-                  title={finalizeReady ? undefined : 'Available once this flow is wired up'}
-                  onClick={() => void create()}
-                >
-                  {creating ? 'Creating…' : 'Create server'}
-                </button>
+            {probe.phase !== 'idle' ? (
+              <div style={{ marginTop: 16 }}>
+                {probe.phase === 'failed' && probe.errors.length > 0 && (
+                  <div className="panel" style={{ borderColor: 'var(--red)', marginBottom: 10 }}>
+                    <div style={{ fontWeight: 600, color: 'var(--red)', marginBottom: 6 }}>
+                      Test failed — fix and try again
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {probe.errors.map((e, i) => (
+                        <li key={i} className="small mono" style={{ color: 'var(--red)' }}>
+                          {e}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div className="row" style={{ alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  {probe.phase === 'running' && <span className="spinner" />}
+                  <span className="small" style={{ fontWeight: 600 }}>
+                    {probe.status}
+                  </span>
+                </div>
+                <div className="console" ref={logBoxRef} style={{ height: 200 }}>
+                  {probe.log.join('\n') || 'Waiting for the server…'}
+                </div>
+                {probe.phase === 'failed' && (
+                  <div className="row" style={{ marginTop: 10, justifyContent: 'flex-end' }}>
+                    <button className="ghost" onClick={resetProbe}>
+                      Back to editing
+                    </button>
+                    <button className="ghost" disabled={creating} onClick={() => void create()}>
+                      Create anyway
+                    </button>
+                    <button className="primary" onClick={() => void testAndCreate()}>
+                      Re-test
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
+            ) : (
+              <>
+                <label
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}
+                >
+                  <input
+                    type="checkbox"
+                    style={{ width: 'auto' }}
+                    checked={startAfter}
+                    onChange={(e) => setStartAfter(e.target.checked)}
+                  />
+                  Start server after creating
+                </label>
+                <div className="row" style={{ marginTop: 12, justifyContent: 'space-between' }}>
+                  <span className="small muted" style={{ alignSelf: 'center' }}>
+                    Saved as a draft — close to resume later.
+                  </span>
+                  <div className="row">
+                    <button className="danger ghost" onClick={() => void discard()}>
+                      Discard
+                    </button>
+                    {finalizeReady ? (
+                      <>
+                        <button
+                          className="ghost"
+                          disabled={creating || !canCreate}
+                          onClick={() => void create()}
+                        >
+                          {creating ? 'Creating…' : 'Create without testing'}
+                        </button>
+                        <button className="primary" disabled={!canCreate} onClick={() => void testAndCreate()}>
+                          Test &amp; Create
+                        </button>
+                      </>
+                    ) : (
+                      <button className="primary" disabled title="Available once this flow is wired up">
+                        Create server
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

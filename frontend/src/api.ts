@@ -79,7 +79,8 @@ export const api = {
   updateDraft: (id: string, patch: Partial<DraftState>) =>
     req<DraftResult>('PATCH', `/servers/draft/${id}`, patch),
   discardDraft: (id: string) => req<void>('DELETE', `/servers/draft/${id}`),
-  finalizeDraft: (id: string) => req<{ server: Server }>('POST', `/servers/draft/${id}/finalize`),
+  finalizeDraft: (id: string, start = false) =>
+    req<{ server: Server; started: boolean }>('POST', `/servers/draft/${id}/finalize`, { start }),
   getSettings: (id: string) =>
     req<AdvancedSettingsResult>('GET', `/servers/${id}/settings`),
   updateSettings: (id: string, settings: Record<string, unknown>) =>

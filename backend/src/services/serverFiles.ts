@@ -275,6 +275,11 @@ export class ServerFilesService {
     return path.join(this.localDir(serverId), '.import');
   }
 
+  /** Isolated server-settings for a boot probe: public listing OFF, nothing announced. */
+  writeProbeServerSettings(serverId: string): string {
+    return this.writeScenarioServerSettings(serverId);
+  }
+
   /** Minimal server-settings.json required by --start-server-load-scenario. */
   private writeScenarioServerSettings(serverId: string): string {
     const dir = this.importScratchDir(serverId);

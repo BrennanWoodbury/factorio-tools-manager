@@ -1,5 +1,6 @@
 import Docker from 'dockerode';
 import { randomBytes } from 'node:crypto';
+import { Writable } from 'node:stream';
 import type { AppConfig } from '../config.js';
 import type { ServerRow } from '../db/models.js';
 import type { FactorioAccount } from './factorioAccount.js';
@@ -270,6 +271,92 @@ export class DockerService {
       return { exitCode: result.StatusCode, logs };
     } catch (err) {
       throw new DockerError(`one-shot job failed: ${(err as Error).message}`);
+    } finally {
+      if (container) await container.remove({ force: true, v: false }).catch(() => {});
+    }
+  }
+
+  /**
+   * Run the binary in a throwaway container while streaming its logs line-by-line.
+   * Resolves as soon as a `readyPatterns` line appears (the server came up) — stopping
+   * the container — or when the process exits on its own, or on timeout. With no
+   * patterns it simply waits for exit (used to stream one-shot generation). No host
+   * ports are published, so a probe never announces itself.
+   */
+  async runProbe(
+    server: ServerRow,
+    hostDataDir: string,
+    args: string[],
+    opts: { readyPatterns?: RegExp[]; timeoutMs?: number; onLine?: (line: string) => void } = {},
+  ): Promise<{ matched: boolean; exitCode: number | null; timedOut: boolean; logs: string }> {
+    const { readyPatterns = [], timeoutMs = 180_000, onLine } = opts;
+    const name = `${this.containerName(server.id)}-probe-${randomBytes(4).toString('hex')}`;
+    const image = this.imageFor(server);
+    await this.ensureImage(image);
+    let container: Docker.Container | undefined;
+    const lines: string[] = [];
+    try {
+      container = await this.docker.createContainer({
+        name,
+        Image: image,
+        Entrypoint: ['/opt/factorio/bin/x64/factorio'],
+        Cmd: args,
+        Labels: { [MANAGED_LABEL]: 'true', [SERVER_ID_LABEL]: server.id },
+        HostConfig: { Binds: [`${hostDataDir}:/factorio`], AutoRemove: false },
+      });
+      await container.start();
+      const stream = (await container.logs({
+        follow: true,
+        stdout: true,
+        stderr: true,
+      })) as unknown as NodeJS.ReadableStream;
+
+      const outcome = await new Promise<{ matched: boolean; exitCode: number | null; timedOut: boolean }>(
+        (resolve) => {
+          let settled = false;
+          const finish = (r: { matched: boolean; exitCode: number | null; timedOut: boolean }) => {
+            if (!settled) {
+              settled = true;
+              resolve(r);
+            }
+          };
+          const timer = setTimeout(() => finish({ matched: false, exitCode: null, timedOut: true }), timeoutMs);
+          let buf = '';
+          const sink = new Writable({
+            write: (chunk: Buffer, _enc, cb) => {
+              buf += chunk.toString('utf8');
+              let nl: number;
+              while ((nl = buf.indexOf('\n')) >= 0) {
+                // eslint-disable-next-line no-control-regex
+                const line = buf.slice(0, nl).replace(/[\r\x00-\x08]/g, '').trimEnd();
+                buf = buf.slice(nl + 1);
+                if (!line) continue;
+                lines.push(line);
+                onLine?.(line);
+                if (readyPatterns.some((re) => re.test(line))) {
+                  clearTimeout(timer);
+                  finish({ matched: true, exitCode: null, timedOut: false });
+                }
+              }
+              cb();
+            },
+          });
+          this.docker.modem.demuxStream(stream, sink, sink);
+          void container!
+            .wait()
+            .then((res: { StatusCode: number }) => {
+              clearTimeout(timer);
+              finish({ matched: false, exitCode: res.StatusCode, timedOut: false });
+            })
+            .catch(() => {});
+        },
+      );
+
+      // Matched or timed out => the process may still be running; stop it.
+      if (outcome.exitCode === null) await container.stop({ t: 5 }).catch(() => {});
+      return { ...outcome, logs: lines.join('\n') };
+    } catch (err) {
+      throw new DockerError(`probe failed: ${(err as Error).message}`);
     } finally {
       if (container) await container.remove({ force: true, v: false }).catch(() => {});
     }
