@@ -67,9 +67,12 @@ export function CreateServerForm({
   const [factorioTag, setFactorioTag] = useState('stable');
   const [gameMode, setGameMode] = useState('space_age');
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
+  const [mapSettings, setMapSettings] = useState<MapGenSettings | null>(null);
   const [mapGenEdited, setMapGenEdited] = useState(false);
   const [modsEdited, setModsEdited] = useState(false);
   const [exchangeString, setExchangeString] = useState('');
+  const [importDecoded, setImportDecoded] = useState(false);
+  const [decoding, setDecoding] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -119,7 +122,10 @@ export function CreateServerForm({
         setFactorioTag(state.factorioTag ?? 'stable');
         setGameMode(state.gameMode ?? 'space_age');
         if (state.mapGen) setMapGen(state.mapGen);
+        if (state.mapSettings) setMapSettings(state.mapSettings);
         if (state.exchangeString) setExchangeString(state.exchangeString);
+        // An import draft with both a string and decoded settings resumes at stage 2.
+        if (state.source === 'import' && state.exchangeString && state.mapGen) setImportDecoded(true);
       } catch (err) {
         toastError((err as Error).message);
       }
@@ -135,9 +141,15 @@ export function CreateServerForm({
       factorioTag,
       gameMode,
       ...(source === 'generate' && mapGen ? { mapGen } : {}),
-      ...(source === 'import' ? { exchangeString } : {}),
+      ...(source === 'import'
+        ? {
+            exchangeString,
+            ...(importDecoded && mapGen ? { mapGen } : {}),
+            ...(importDecoded && mapSettings ? { mapSettings } : {}),
+          }
+        : {}),
     }),
-    [name, subdomain, maxPlayers, description, factorioTag, gameMode, mapGen, exchangeString, source],
+    [name, subdomain, maxPlayers, description, factorioTag, gameMode, mapGen, mapSettings, exchangeString, importDecoded, source],
   );
 
   // Debounced autosave to the draft as fields change.
@@ -170,6 +182,33 @@ export function CreateServerForm({
     }
   };
 
+  // Import stage 1 -> 2: decode the exchange string into editable settings via the
+  // draft's own binary, then persist them so preview / Test & Create use them.
+  const decodeString = async () => {
+    if (!draftId || !exchangeString.trim()) return;
+    setDecoding(true);
+    try {
+      await api.updateDraft(draftId, { exchangeString });
+      const r = await api.importExchangeString(draftId, exchangeString.trim());
+      const decodedSettings = (r.mapSettings ?? null) as MapGenSettings | null;
+      setMapGen(r.mapGen);
+      setMapSettings(decodedSettings);
+      setMapGenEdited(true);
+      setImportDecoded(true);
+      await api.updateDraft(draftId, {
+        exchangeString,
+        gameMode,
+        mapGen: r.mapGen,
+        mapSettings: decodedSettings,
+      });
+      toastSuccess('Decoded — review and tweak below');
+    } catch (err) {
+      toastError((err as Error).message);
+    } finally {
+      setDecoding(false);
+    }
+  };
+
   const discardIfDraft = async () => {
     if (draftId && !finalized.current) await api.discardDraft(draftId).catch(() => {});
   };
@@ -184,6 +223,10 @@ export function CreateServerForm({
     setConfirmChange(false);
     await discardIfDraft();
     setDraftId(null);
+    setMapGen(null);
+    setMapSettings(null);
+    setExchangeString('');
+    setImportDecoded(false);
     setMapGenEdited(false);
     setModsEdited(false);
     setPhase('mode');
@@ -261,8 +304,8 @@ export function CreateServerForm({
 
   const resetProbe = () => setProbe({ phase: 'idle', status: '', log: [], errors: [] });
 
-  // Import/save flows can't finalize yet (decode / upload land in later slices).
-  const finalizeReady = source === 'generate';
+  // Generate is always ready; Import is ready once decoded. (Save lands in a later slice.)
+  const finalizeReady = source === 'generate' || (source === 'import' && importDecoded);
   const canCreate = finalizeReady && name.trim().length > 0 && subdomain.trim().length > 0;
 
   return (
@@ -422,7 +465,10 @@ export function CreateServerForm({
                   className="mono"
                   rows={4}
                   value={exchangeString}
-                  onChange={(e) => setExchangeString(e.target.value)}
+                  onChange={(e) => {
+                    setExchangeString(e.target.value);
+                    setImportDecoded(false); // editing invalidates the decoded stage
+                  }}
                   placeholder=">>>eNpj..."
                 />
                 <div className="small muted" style={{ marginTop: 4 }}>
@@ -435,10 +481,37 @@ export function CreateServerForm({
                     What's a map exchange string?
                   </a>
                 </div>
-                <div className="small" style={{ marginTop: 10, color: 'var(--accent)' }}>
-                  Decoding this string into an editable, previewable map — and creating from it —
-                  arrives in the next step of this feature.
+                <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 10 }}>
+                  <button disabled={decoding || !exchangeString.trim()} onClick={() => void decodeString()}>
+                    {decoding ? 'Decoding…' : importDecoded ? 'Re-decode' : 'Decode & preview'}
+                  </button>
+                  {importDecoded && (
+                    <span className="small" style={{ color: 'var(--green)' }}>
+                      Decoded ✓
+                    </span>
+                  )}
                 </div>
+
+                {importDecoded && mapGen && (
+                  <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                    <div className="small muted" style={{ marginBottom: 10 }}>
+                      These are the settings your string maps to. Pick the matching game mode,
+                      preview, and tweak — then Test &amp; Create.
+                    </div>
+                    <GameModeSelect value={gameMode} onChange={setGameMode} />
+                    <div style={{ marginTop: 12 }}>
+                      {draftId && <MapPreview serverId={draftId} mapGen={mapGen} />}
+                      <MapGenEditor
+                        value={mapGen}
+                        onChange={(v) => {
+                          setMapGen(v);
+                          setMapGenEdited(true);
+                        }}
+                        mode={gameMode}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
