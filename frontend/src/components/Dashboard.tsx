@@ -90,37 +90,6 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
         </button>
       </div>
 
-      {drafts.length > 0 && (
-        <div className="panel" style={{ borderStyle: 'dashed' }}>
-          <div className="small muted" style={{ marginBottom: 8 }}>
-            Continue new server ({drafts.length}) — unfinished drafts, not created yet
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {drafts.map((d) => (
-              <div key={d.id} className="spread" style={{ gap: 12 }}>
-                <div style={{ minWidth: 0 }}>
-                  <span style={{ fontWeight: 600 }}>{d.name || 'Untitled draft'}</span>
-                  <span className="small muted" style={{ marginLeft: 8 }}>
-                    {SOURCE_LABEL[d.source] ?? d.source}
-                    {d.expiresAt ? ` · ${expiresLabel(d.expiresAt)}` : ''}
-                  </span>
-                </div>
-                <div className="row" style={{ flex: '0 0 auto' }}>
-                  <button onClick={() => resumeDraft(d.id)}>Continue</button>
-                  <button
-                    className="danger ghost"
-                    title="Discard this draft"
-                    onClick={() => void discardDraft(d.id)}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {servers.length === 0 && drafts.length === 0 && (
         <div className="panel muted">No servers yet. Create one to get started.</div>
       )}
@@ -151,6 +120,42 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
           </div>
         );
       })}
+
+      {drafts.length > 0 && (
+        <div style={{ marginTop: 28 }}>
+          <div className="spread" style={{ marginBottom: 4 }}>
+            <h2 style={{ margin: 0 }}>New server drafts ({drafts.length})</h2>
+          </div>
+          <div className="small muted" style={{ marginBottom: 12 }}>
+            Unfinished — not created yet. Pick up where you left off, or discard.
+          </div>
+          <div className="panel" style={{ borderStyle: 'dashed' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {drafts.map((d) => (
+                <div key={d.id} className="spread" style={{ gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ fontWeight: 600 }}>{d.name || 'Untitled draft'}</span>
+                    <span className="small muted" style={{ marginLeft: 8 }}>
+                      {SOURCE_LABEL[d.source] ?? d.source}
+                      {d.expiresAt ? ` · ${expiresLabel(d.expiresAt)}` : ''}
+                    </span>
+                  </div>
+                  <div className="row" style={{ flex: '0 0 auto' }}>
+                    <button onClick={() => resumeDraft(d.id)}>Continue</button>
+                    <button
+                      className="danger ghost"
+                      title="Discard this draft"
+                      onClick={() => void discardDraft(d.id)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreate && (
         <CreateServerForm

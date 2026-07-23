@@ -7,23 +7,29 @@ import { MapGenEditor } from './MapGenEditor';
 import { DnsNamePreview } from './DnsNamePreview';
 import { GameModeSelect } from './GameModeSelect';
 import { Collapsible } from './Collapsible';
+import { IconTerminal, IconUpload, IconWorld } from './icons';
 
-const MODES: { source: DraftSource; icon: string; title: string; blurb: string }[] = [
+const MODES: {
+  source: DraftSource;
+  Icon: (props: { size?: number }) => JSX.Element;
+  title: string;
+  blurb: string;
+}[] = [
   {
     source: 'generate',
-    icon: '🌍',
+    Icon: IconWorld,
     title: 'Generate new world',
     blurb: 'Pick a game mode and tune resources, water, and terrain. Preview before you commit.',
   },
   {
     source: 'import',
-    icon: '🧬',
+    Icon: IconTerminal,
     title: 'Import map string',
     blurb: 'Paste a Factorio map exchange string; we decode it and show exactly what it maps to.',
   },
   {
     source: 'save',
-    icon: '💾',
+    Icon: IconUpload,
     title: 'Load from save',
     blurb: 'Upload an existing save file and start the server straight from it.',
   },
@@ -210,7 +216,9 @@ export function CreateServerForm({
                     height: 'auto',
                   }}
                 >
-                  <span style={{ fontSize: 22, lineHeight: 1 }}>{m.icon}</span>
+                  <span style={{ color: 'var(--accent)', display: 'flex', flex: '0 0 auto', marginTop: 1 }}>
+                    <m.Icon size={22} />
+                  </span>
                   <span>
                     <span style={{ fontWeight: 600, display: 'block' }}>{m.title}</span>
                     <span className="small muted">{m.blurb}</span>
