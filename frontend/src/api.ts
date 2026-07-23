@@ -3,6 +3,9 @@ import type {
   BackupInfo,
   CatalogEntry,
   DnsSettings,
+  DraftDto,
+  DraftResult,
+  DraftState,
   FactorioAccount,
   GlobalDefaults,
   MapGen,
@@ -67,6 +70,16 @@ export const api = {
   updateServer: (id: string, input: Record<string, unknown>) =>
     req<{ server: Server }>('PATCH', `/servers/${id}`, input),
   deleteServer: (id: string) => req<void>('DELETE', `/servers/${id}`),
+
+  // new-server wizard drafts
+  createDraft: (input: { source: DraftState['source'] } & Partial<DraftState>) =>
+    req<DraftResult>('POST', '/servers/draft', input),
+  listDrafts: () => req<{ drafts: DraftDto[] }>('GET', '/servers/draft'),
+  getDraft: (id: string) => req<DraftResult>('GET', `/servers/draft/${id}`),
+  updateDraft: (id: string, patch: Partial<DraftState>) =>
+    req<DraftResult>('PATCH', `/servers/draft/${id}`, patch),
+  discardDraft: (id: string) => req<void>('DELETE', `/servers/draft/${id}`),
+  finalizeDraft: (id: string) => req<{ server: Server }>('POST', `/servers/draft/${id}/finalize`),
   getSettings: (id: string) =>
     req<AdvancedSettingsResult>('GET', `/servers/${id}/settings`),
   updateSettings: (id: string, settings: Record<string, unknown>) =>

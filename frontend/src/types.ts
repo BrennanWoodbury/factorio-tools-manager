@@ -39,6 +39,45 @@ export interface MapGen {
   mapSettings?: MapGenSettings | null;
 }
 
+/** New-server wizard flow. */
+export type DraftSource = 'generate' | 'import' | 'save';
+
+/** In-progress wizard state, persisted on the draft (resumable across restarts). */
+export interface DraftState {
+  source: DraftSource;
+  step?: string;
+  name?: string;
+  subdomain?: string;
+  maxPlayers?: number;
+  description?: string;
+  factorioTag?: string;
+  gameMode?: string;
+  mapGen?: MapGenSettings;
+  mapSettings?: MapGenSettings | null;
+  mods?: ModEntry[];
+  exchangeString?: string;
+  saveStaged?: boolean;
+  saveFileName?: string;
+}
+
+/** Draft summary for the "Continue new server" list. */
+export interface DraftDto {
+  id: string;
+  source: DraftSource;
+  step: string | null;
+  name: string;
+  subdomain: string;
+  gameMode: string;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string | null;
+}
+
+export interface DraftResult {
+  draft: DraftDto;
+  state: DraftState;
+}
+
 /** Global server defaults (cascading, per-server overridable). */
 export interface GlobalDefaults {
   autoRestart: boolean;

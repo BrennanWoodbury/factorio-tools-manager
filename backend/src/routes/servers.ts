@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import type { AppContext } from '../context.js';
-import { toDto } from '../db/models.js';
+import { toDto, toDraftDto, type DraftState, type ServerRow } from '../db/models.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { ValidationError } from '../lib/errors.js';
 import { sanitizeName } from '../services/serverFiles.js';
@@ -44,12 +44,55 @@ const updateSchema = z.object({
   backupKeepManual: z.number().int().min(1).max(1000).optional(),
 });
 
+const gameModeSchema = z.enum(['vanilla', 'space_age', 'space_age_no_quality', 'modded']);
+
+// A new-server wizard draft: created lazily when a mode is picked, then PATCHed as
+// the user progresses. All fields optional except the source flow.
+const draftCreateSchema = z.object({
+  source: z.enum(['generate', 'import', 'save']),
+  name: z.string().max(100).optional(),
+  subdomain: z.string().max(63).optional(),
+  maxPlayers: z.number().int().min(0).max(500).optional(),
+  description: z.string().max(1000).optional(),
+  factorioTag: z.string().max(128).optional(),
+  gameMode: gameModeSchema.optional(),
+  mapGen: z.record(z.string(), z.unknown()).optional(),
+  mods: z.array(modEntrySchema).optional(),
+});
+
+const draftPatchSchema = z.object({
+  step: z.string().max(50).optional(),
+  name: z.string().max(100).optional(),
+  subdomain: z.string().max(63).optional(),
+  maxPlayers: z.number().int().min(0).max(500).optional(),
+  description: z.string().max(1000).optional(),
+  factorioTag: z.string().max(128).optional(),
+  gameMode: gameModeSchema.optional(),
+  mapGen: z.record(z.string(), z.unknown()).optional(),
+  mapSettings: z.record(z.string(), z.unknown()).optional(),
+  mods: z.array(modEntrySchema).optional(),
+  exchangeString: z.string().max(200000).optional(),
+  saveStaged: z.boolean().optional(),
+  saveFileName: z.string().max(300).optional(),
+});
+
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const result = schema.safeParse(body);
   if (!result.success) {
     throw new ValidationError(result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
   }
   return result.data;
+}
+
+/** Draft response: the list-facing DTO plus the full resume state for the wizard. */
+function draftBody(row: ServerRow): { draft: ReturnType<typeof toDraftDto>; state: DraftState } {
+  let state: DraftState = { source: 'generate' };
+  try {
+    if (row.draft_state_json) state = JSON.parse(row.draft_state_json) as DraftState;
+  } catch {
+    /* corrupt state — fall back to a generate draft */
+  }
+  return { draft: toDraftDto(row), state };
 }
 
 export function serversRouter(ctx: AppContext): Router {
@@ -96,6 +139,72 @@ export function serversRouter(ctx: AppContext): Router {
           await ctx.modpacks.apply(defaults.modpackId, row.id);
         } catch (err) {
           console.warn(`[create] default modpack apply failed for ${row.id}: ${(err as Error).message}`);
+        }
+      }
+      res.status(201).json({ server: dtoOf(row) });
+    }),
+  );
+
+  // ---- New-server wizard drafts (must precede '/:id' so '/draft' isn't captured) ----
+
+  r.post(
+    '/draft',
+    asyncHandler(async (req, res) => {
+      const input = parse(draftCreateSchema, req.body);
+      res.status(201).json(draftBody(await manager.createDraft(input)));
+    }),
+  );
+
+  r.get(
+    '/draft',
+    asyncHandler(async (_req, res) => {
+      res.json({ drafts: manager.listDrafts().map(toDraftDto) });
+    }),
+  );
+
+  r.get(
+    '/draft/:id',
+    asyncHandler(async (req, res) => {
+      res.json(draftBody(manager.getDraft(req.params.id)));
+    }),
+  );
+
+  r.patch(
+    '/draft/:id',
+    asyncHandler(async (req, res) => {
+      const patch = parse(draftPatchSchema, req.body);
+      res.json(draftBody(await manager.updateDraft(req.params.id, patch)));
+    }),
+  );
+
+  r.delete(
+    '/draft/:id',
+    asyncHandler(async (req, res) => {
+      manager.discardDraft(req.params.id);
+      res.status(204).end();
+    }),
+  );
+
+  // Finalize = turn the draft into a real server. This is the "create without
+  // testing" path today; the pre-flight boot probe wraps it in a later slice.
+  r.post(
+    '/draft/:id/finalize',
+    asyncHandler(async (req, res) => {
+      const draft = manager.getDraft(req.params.id); // 404 unless a draft
+      let state: DraftState = { source: 'generate' };
+      try {
+        if (draft.draft_state_json) state = JSON.parse(draft.draft_state_json) as DraftState;
+      } catch {
+        /* ignore */
+      }
+      const row = await manager.finalize(req.params.id);
+      // Default modpack (creation-time) when the draft chose no mods — mirrors POST /.
+      const defaults = getGlobalDefaults(ctx.db);
+      if (!state.mods?.length && defaults.modpackId) {
+        try {
+          await ctx.modpacks.apply(defaults.modpackId, row.id);
+        } catch (err) {
+          console.warn(`[finalize] default modpack apply failed for ${row.id}: ${(err as Error).message}`);
         }
       }
       res.status(201).json({ server: dtoOf(row) });
