@@ -13,6 +13,7 @@ import { ServerManager } from './services/serverManager.js';
 import { ModService } from './services/modService.js';
 import { DdnsJob } from './jobs/ddns.js';
 import { BackupJob } from './jobs/backup.js';
+import { DraftPruneJob } from './jobs/draftPrune.js';
 
 /** Wires up all singletons from config. Built once at startup. */
 export interface AppContext {
@@ -29,6 +30,7 @@ export interface AppContext {
   manager: ServerManager;
   ddns: DdnsJob;
   backups: BackupJob;
+  draftPrune: DraftPruneJob;
 }
 
 export function buildContext(config: AppConfig): AppContext {
@@ -45,5 +47,6 @@ export function buildContext(config: AppConfig): AppContext {
   const manager = new ServerManager(db, repo, allocator, docker, dns, rcon, config);
   const ddns = new DdnsJob(dns);
   const backups = new BackupJob(manager);
-  return { config, db, repo, allocator, docker, dns, rcon, mods, modpacks, mapGenTemplates, manager, ddns, backups };
+  const draftPrune = new DraftPruneJob(manager);
+  return { config, db, repo, allocator, docker, dns, rcon, mods, modpacks, mapGenTemplates, manager, ddns, backups, draftPrune };
 }

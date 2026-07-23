@@ -1,15 +1,41 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
-import type { Server, ServerStatus, SystemStatus } from '../types';
+import type { DraftDto, Server, ServerStatus, SystemStatus } from '../types';
+import { toastError } from '../ui';
 import { CreateServerForm } from './CreateServerForm';
 import { StatusBadge } from './StatusBadge';
 import { LifecycleControls } from './LifecycleControls';
+
+/** "expires in 22h" / "expires in 8 min" from an absolute deadline. */
+function expiresLabel(iso: string | null): string {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return 'expiring…';
+  const h = Math.floor(ms / 3_600_000);
+  if (h >= 1) return `expires in ${h}h`;
+  return `expires in ${Math.max(1, Math.floor(ms / 60_000))} min`;
+}
+const SOURCE_LABEL: Record<string, string> = {
+  generate: 'Generate',
+  import: 'Import string',
+  save: 'From save',
+};
 
 export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
   const [servers, setServers] = useState<Server[]>([]);
   const [statuses, setStatuses] = useState<Record<string, ServerStatus>>({});
   const [system, setSystem] = useState<SystemStatus | null>(null);
+  const [drafts, setDrafts] = useState<DraftDto[]>([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [resumeId, setResumeId] = useState<string | null>(null);
+
+  const loadDrafts = useCallback(async () => {
+    try {
+      setDrafts((await api.listDrafts()).drafts);
+    } catch {
+      /* non-critical */
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const { servers } = await api.listServers();
@@ -22,7 +48,25 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
       if (r) map[servers[i].id] = r;
     });
     setStatuses(map);
-  }, []);
+    void loadDrafts();
+  }, [loadDrafts]);
+
+  const openNew = () => {
+    setResumeId(null);
+    setShowCreate(true);
+  };
+  const resumeDraft = (id: string) => {
+    setResumeId(id);
+    setShowCreate(true);
+  };
+  const discardDraft = async (id: string) => {
+    try {
+      await api.discardDraft(id);
+      await loadDrafts();
+    } catch (err) {
+      toastError((err as Error).message);
+    }
+  };
 
   useEffect(() => {
     void refresh();
@@ -41,12 +85,43 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
 
       <div className="spread" style={{ marginBottom: 14 }}>
         <h2 style={{ margin: 0 }}>Servers ({servers.length})</h2>
-        <button className="primary" onClick={() => setShowCreate(true)}>
+        <button className="primary" onClick={openNew}>
           + New server
         </button>
       </div>
 
-      {servers.length === 0 && (
+      {drafts.length > 0 && (
+        <div className="panel" style={{ borderStyle: 'dashed' }}>
+          <div className="small muted" style={{ marginBottom: 8 }}>
+            Continue new server ({drafts.length}) — unfinished drafts, not created yet
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {drafts.map((d) => (
+              <div key={d.id} className="spread" style={{ gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <span style={{ fontWeight: 600 }}>{d.name || 'Untitled draft'}</span>
+                  <span className="small muted" style={{ marginLeft: 8 }}>
+                    {SOURCE_LABEL[d.source] ?? d.source}
+                    {d.expiresAt ? ` · ${expiresLabel(d.expiresAt)}` : ''}
+                  </span>
+                </div>
+                <div className="row" style={{ flex: '0 0 auto' }}>
+                  <button onClick={() => resumeDraft(d.id)}>Continue</button>
+                  <button
+                    className="danger ghost"
+                    title="Discard this draft"
+                    onClick={() => void discardDraft(d.id)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {servers.length === 0 && drafts.length === 0 && (
         <div className="panel muted">No servers yet. Create one to get started.</div>
       )}
 
@@ -81,9 +156,15 @@ export function Dashboard({ onOpen }: { onOpen: (id: string) => void }) {
         <CreateServerForm
           dnsEnabled={system?.dns.enabled ?? false}
           baseDomain={system?.dns.baseDomain ?? null}
-          onClose={() => setShowCreate(false)}
+          resumeDraftId={resumeId ?? undefined}
+          onClose={() => {
+            setShowCreate(false);
+            setResumeId(null);
+            void loadDrafts(); // a dismissed draft may now exist / have changed
+          }}
           onCreated={(id) => {
             setShowCreate(false);
+            setResumeId(null);
             void refresh();
             onOpen(id);
           }}

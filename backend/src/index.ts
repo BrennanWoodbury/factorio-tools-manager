@@ -79,6 +79,7 @@ async function main() {
 
   ctx.ddns.start();
   ctx.backups.start();
+  ctx.draftPrune.start();
 
   const app = express();
   app.use(cors({ origin: true, credentials: true }));

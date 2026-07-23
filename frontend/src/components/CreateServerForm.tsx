@@ -133,12 +133,17 @@ export function CreateServerForm({
   };
 
   const back = async () => {
+    // Switching mode means a different draft — discard the current one.
     await discardIfDraft();
     setDraftId(null);
     setPhase('mode');
   };
 
-  const close = async () => {
+  // Dismiss keeps the draft (resume later from "Continue new server").
+  const close = () => onClose();
+
+  // Explicit abandon — remove the draft.
+  const discard = async () => {
     await discardIfDraft();
     onClose();
   };
@@ -323,11 +328,11 @@ export function CreateServerForm({
 
             <div className="row" style={{ marginTop: 18, justifyContent: 'space-between' }}>
               <span className="small muted" style={{ alignSelf: 'center' }}>
-                Saved as a draft — you can close and resume later.
+                Saved as a draft — close to resume later from “Continue new server”.
               </span>
               <div className="row">
-                <button className="ghost" onClick={() => void close()}>
-                  Cancel
+                <button className="danger ghost" onClick={() => void discard()}>
+                  Discard
                 </button>
                 <button
                   className="primary"
