@@ -180,6 +180,12 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
   .drawer-body { animation: none; }
 }
 
+/* Container log viewer */
+.log-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.log-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.log-err { color: var(--red); }
+.log-warn { color: var(--accent); }
+
 .console {
   background: #0d0f13; border: 1px solid var(--border); border-radius: 6px;
   padding: 12px; height: 340px; overflow-y: auto; white-space: pre-wrap;

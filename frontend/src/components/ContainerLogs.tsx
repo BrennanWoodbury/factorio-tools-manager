@@ -1,0 +1,112 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+/** Classify a log line for coloring (Factorio prefixes errors/warnings). */
+function lineClass(line: string): string | undefined {
+  if (/\berror\b|\bfailed\b|exception|fatal/i.test(line)) return 'log-err';
+  if (/\bwarn(ing)?\b/i.test(line)) return 'log-warn';
+  return undefined;
+}
+
+/**
+ * Live viewer for a server's Docker container logs (stdout/stderr) — distinct from the
+ * RCON console. Streams over SSE (scrollback + follow), reconnecting when the server
+ * (re)starts. Works stopped too: you still see the last container's output.
+ */
+export function ContainerLogs({ id, running }: { id: string; running: boolean }) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [follow, setFollow] = useState(true);
+  const [live, setLive] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const esRef = useRef<EventSource | null>(null);
+
+  const connect = useCallback(() => {
+    esRef.current?.close();
+    setLive(true);
+    const es = new EventSource(`/api/servers/${id}/logs/stream?tail=1000`, { withCredentials: true });
+    esRef.current = es;
+    es.addEventListener('log', (e) => {
+      const { line } = JSON.parse((e as MessageEvent).data) as { line: string };
+      setLines((l) => (l.length > 6000 ? [...l.slice(-5000), line] : [...l, line]));
+    });
+    es.addEventListener('ended', () => {
+      setLive(false);
+      es.close();
+    });
+    es.onerror = () => {
+      setLive(false);
+      es.close();
+    };
+  }, [id]);
+
+  // Connect on mount; tear down on unmount.
+  useEffect(() => {
+    connect();
+    return () => esRef.current?.close();
+  }, [connect]);
+
+  // Resume the stream when the server comes back up.
+  useEffect(() => {
+    if (running && !live) connect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
+
+  // Follow the tail unless the user paused it.
+  useEffect(() => {
+    if (follow) boxRef.current?.scrollTo(0, boxRef.current.scrollHeight);
+  }, [lines, follow]);
+
+  const download = () => {
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `factorio-${id}-logs.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="panel">
+      <div className="spread" style={{ marginBottom: 10 }}>
+        <div className="row" style={{ alignItems: 'center', gap: 10 }}>
+          <span className={`log-dot ${live ? 'on' : ''}`} />
+          <span className="small muted">{live ? 'Live' : 'Not streaming'}</span>
+          <span className="small muted">· container stdout / stderr</span>
+        </div>
+        <div className="row" style={{ alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+            <input
+              type="checkbox"
+              style={{ width: 'auto' }}
+              checked={follow}
+              onChange={(e) => setFollow(e.target.checked)}
+            />
+            <span className="small">Follow</span>
+          </label>
+          {!live && (
+            <button className="ghost small" onClick={connect}>
+              Reconnect
+            </button>
+          )}
+          <button className="ghost small" onClick={() => setLines([])}>
+            Clear
+          </button>
+          <button className="ghost small" disabled={lines.length === 0} onClick={download}>
+            Download
+          </button>
+        </div>
+      </div>
+      <div className="console" ref={boxRef}>
+        {lines.length === 0 ? (
+          <span className="muted">Waiting for output…</span>
+        ) : (
+          lines.map((l, i) => (
+            <div key={i} className={lineClass(l)}>
+              {l}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}

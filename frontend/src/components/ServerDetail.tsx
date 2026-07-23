@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { Server, ServerStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { Console } from './Console';
+import { ContainerLogs } from './ContainerLogs';
 import { SavesPanel } from './SavesPanel';
 import { BackupsPanel } from './BackupsPanel';
 import { ModsPanel } from './ModsPanel';
@@ -11,10 +12,11 @@ import { SettingsPanel } from './SettingsPanel';
 import { LifecycleControls } from './LifecycleControls';
 import { toastError } from '../ui';
 
-type Tab = 'overview' | 'console' | 'saves' | 'mapgen' | 'mods' | 'settings';
+type Tab = 'overview' | 'console' | 'logs' | 'saves' | 'mapgen' | 'mods' | 'settings';
 const TAB_LABELS: Record<Tab, string> = {
   overview: 'Overview',
   console: 'Console',
+  logs: 'Logs',
   saves: 'Saves',
   mapgen: 'Map gen',
   mods: 'Mods',
@@ -81,7 +83,7 @@ export function ServerDetail({ id, onBack }: { id: string; onBack: () => void })
       </div>
 
       <div className="tabs">
-        {(['overview', 'console', 'saves', 'mapgen', 'mods', 'settings'] as Tab[]).map((t) => (
+        {(['overview', 'console', 'logs', 'saves', 'mapgen', 'mods', 'settings'] as Tab[]).map((t) => (
           <div key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
             {TAB_LABELS[t]}
           </div>
@@ -90,6 +92,7 @@ export function ServerDetail({ id, onBack }: { id: string; onBack: () => void })
 
       {tab === 'overview' && <Overview server={server} status={status} />}
       {tab === 'console' && <Console id={id} running={running} />}
+      {tab === 'logs' && <ContainerLogs id={id} running={running} />}
       {tab === 'saves' && (
         <>
           <SavesPanel server={server} onChanged={load} />

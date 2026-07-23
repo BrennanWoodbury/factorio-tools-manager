@@ -362,6 +362,49 @@ export class DockerService {
     }
   }
 
+  /**
+   * Follow a server container's logs live: emit recent scrollback (`tail`) then stream
+   * new lines to `onLine`, calling `onEnd` when the stream closes (container stopped or
+   * removed). Returns a stop() to tear down. Throws if the container doesn't exist.
+   */
+  async followLogs(
+    serverId: string,
+    opts: { tail?: number; onLine: (line: string) => void; onEnd?: () => void },
+  ): Promise<() => void> {
+    const container = this.docker.getContainer(this.containerName(serverId));
+    await container.inspect(); // 404s if there's no container yet
+    const stream = (await container.logs({
+      follow: true,
+      stdout: true,
+      stderr: true,
+      tail: opts.tail ?? 500,
+    })) as unknown as NodeJS.ReadableStream;
+    let buf = '';
+    const sink = new Writable({
+      write: (chunk: Buffer, _enc, cb) => {
+        buf += chunk.toString('utf8');
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          // eslint-disable-next-line no-control-regex
+          const line = buf.slice(0, nl).replace(/[\r\x00-\x08]/g, '').trimEnd();
+          buf = buf.slice(nl + 1);
+          if (line) opts.onLine(line);
+        }
+        cb();
+      },
+    });
+    this.docker.modem.demuxStream(stream, sink, sink);
+    stream.on('end', () => opts.onEnd?.());
+    stream.on('error', () => opts.onEnd?.());
+    return () => {
+      try {
+        (stream as unknown as { destroy?: () => void }).destroy?.();
+      } catch {
+        /* already gone */
+      }
+    };
+  }
+
   private async readContainerLogs(container: Docker.Container): Promise<string> {
     // No tail limit: one-shots emit results we parse (e.g. a multi-KB exchange-string
     // JSON on a single line) that a small tail can drop. One-shots are short-lived,

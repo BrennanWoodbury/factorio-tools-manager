@@ -363,6 +363,43 @@ export function serversRouter(ctx: AppContext): Router {
     }),
   );
 
+  // Live container logs (SSE): scrollback then follow. Events: log | ended.
+  r.get(
+    '/:id/logs/stream',
+    asyncHandler(async (req, res) => {
+      manager.get(req.params.id); // 404 if unknown
+      const tail = Math.min(Number(req.query.tail) || 1000, 5000);
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      const send = (event: string, data: unknown) =>
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      const heartbeat = setInterval(() => res.write(': ping\n\n'), 15_000);
+      let closed = false;
+      let stop = () => {};
+      req.on('close', () => {
+        closed = true;
+        stop();
+        clearInterval(heartbeat);
+        res.end();
+      });
+      try {
+        stop = await ctx.docker.followLogs(req.params.id, {
+          tail,
+          onLine: (line) => !closed && send('log', { line }),
+          onEnd: () => !closed && send('ended', {}),
+        });
+        if (closed) stop();
+      } catch {
+        send('log', { line: "(no container logs yet — this server hasn't run)" });
+        send('ended', {});
+      }
+    }),
+  );
+
   // ---- Advanced server settings (full server-settings.json body) ----
 
   r.get(
