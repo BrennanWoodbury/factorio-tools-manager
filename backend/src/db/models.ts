@@ -84,6 +84,10 @@ export interface DraftState {
   /** Save flow: a save file has been uploaded into the draft's dir. */
   saveStaged?: boolean;
   saveFileName?: string;
+  /** Save flow: what the uploaded save's own header says it needs (read at upload). */
+  saveGameVersion?: string;
+  saveScenario?: string;
+  saveMods?: { name: string; version: string }[];
 }
 
 /** API-facing draft shape for the "Continue new server" list. */

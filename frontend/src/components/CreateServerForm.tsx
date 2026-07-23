@@ -74,6 +74,11 @@ export function CreateServerForm({
   const [importDecoded, setImportDecoded] = useState(false);
   const [decoding, setDecoding] = useState(false);
   const [savedSaveName, setSavedSaveName] = useState<string | null>(null);
+  // What the uploaded save's own header says it needs (read server-side, no boot).
+  const [saveInfo, setSaveInfo] = useState<{
+    gameVersion?: string;
+    mods?: { name: string; version: string }[];
+  } | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const [busy, setBusy] = useState(false);
@@ -130,6 +135,8 @@ export function CreateServerForm({
         // An import draft with both a string and decoded settings resumes at stage 2.
         if (state.source === 'import' && state.exchangeString && state.mapGen) setImportDecoded(true);
         if (state.saveStaged && state.saveFileName) setSavedSaveName(state.saveFileName);
+        if (state.saveGameVersion || state.saveMods)
+          setSaveInfo({ gameVersion: state.saveGameVersion, mods: state.saveMods });
       } catch (err) {
         toastError((err as Error).message);
       }
@@ -220,8 +227,9 @@ export function CreateServerForm({
     if (!f || !draftId) return;
     setUploading(true);
     try {
-      const { saveName } = await api.uploadDraftSave(draftId, f);
+      const { saveName, gameVersion, mods } = await api.uploadDraftSave(draftId, f);
       setSavedSaveName(saveName);
+      setSaveInfo(gameVersion || mods ? { gameVersion, mods } : null);
       toastSuccess(`Uploaded “${saveName}”`);
     } catch (err) {
       toastError((err as Error).message);
@@ -549,14 +557,38 @@ export function CreateServerForm({
                     Uploading…
                   </div>
                 ) : savedSaveName ? (
-                  <div className="small" style={{ marginTop: 8, color: 'var(--green)' }}>
-                    Uploaded “{savedSaveName}” ✓ — Test &amp; Create boots it, downloading any mods
-                    it needs.
-                  </div>
+                  <>
+                    <div className="small" style={{ marginTop: 8, color: 'var(--green)' }}>
+                      Uploaded “{savedSaveName}” ✓
+                    </div>
+                    {saveInfo && (
+                      <div className="panel" style={{ marginTop: 8, padding: '10px 12px' }}>
+                        <div className="small muted" style={{ marginBottom: 6 }}>
+                          Read from the save
+                          {saveInfo.gameVersion && <> · built with Factorio {saveInfo.gameVersion}</>}
+                        </div>
+                        {saveInfo.mods && saveInfo.mods.length > 0 ? (
+                          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                            {saveInfo.mods.map((m) => (
+                              <span key={m.name} className="mod-chip mono">
+                                {m.name} <span className="muted">{m.version}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="small muted">No mods — this is a vanilla save.</div>
+                        )}
+                        <div className="small muted" style={{ marginTop: 8 }}>
+                          Test &amp; Create installs these at these exact versions, then boots the
+                          save to verify.
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="small muted" style={{ marginTop: 8 }}>
-                    Upload an existing Factorio save. Test &amp; Create smart-loads any mods the save
-                    requires from the portal, then boots it to verify.
+                    Upload an existing Factorio save. Its mods are read from the file itself, then
+                    installed and verified by Test &amp; Create.
                   </div>
                 )}
               </div>

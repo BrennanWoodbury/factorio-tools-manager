@@ -94,7 +94,11 @@ export const api = {
       const err = (json as { error?: { code: string; message: string } })?.error;
       throw new ApiError(err?.message ?? `HTTP ${res.status}`, err?.code ?? 'ERROR', res.status);
     }
-    return json as { saveName: string };
+    return json as {
+      saveName: string;
+      gameVersion?: string;
+      mods?: { name: string; version: string }[];
+    };
   },
   getSettings: (id: string) =>
     req<AdvancedSettingsResult>('GET', `/servers/${id}/settings`),

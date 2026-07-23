@@ -9,6 +9,7 @@ import { DnsService } from './dnsService.js';
 import { RconService } from './rconService.js';
 import { serverFiles, sanitizeName, type ModEntry } from './serverFiles.js';
 import { getFactorioAccount } from './factorioAccount.js';
+import { readSaveHeader, portalModsFor, bundledModsFor, type SaveHeader } from './saveInspect.js';
 import {
   CASCADE,
   getGlobalDefaults,
@@ -34,34 +35,6 @@ function extractProbeErrors(logs: string): string[] {
     out.push(raw.replace(/^\s*\d+\.\d+\s+/, '').trim());
   }
   return [...new Set(out)].slice(-12);
-}
-
-/**
- * Parse the mod names a save requires but that aren't installed, out of Factorio's
- * boot log — so we can auto-download them (probe-driven smart-load for the save flow).
- * Heuristic across a few message shapes; verified defensively (non-matches just mean
- * we surface the raw error instead).
- */
-function parseMissingMods(logs: string): string[] {
-  const names = new Set<string>();
-  const add = (n?: string) => {
-    const name = n?.trim();
-    if (name && !/^(base|the|a|an|mod|mods)$/i.test(name)) names.add(name);
-  };
-  for (const line of logs.split('\n')) {
-    let m: RegExpExecArray | null;
-    if ((m = /missing (?:mod|dependenc(?:y|ies))[:\s]+["']?([A-Za-z0-9][A-Za-z0-9 _-]*?)["']?\s*(?:[<>=(]|$)/i.exec(line)))
-      add(m[1]);
-    if ((m = /mod ["']([^"']+)["'][^\n]*(?:not found|is missing|not installed)/i.exec(line))) add(m[1]);
-    // "Dependencies were not met: X >= 1.0, Y"
-    if (/dependenc(?:y|ies) (?:were|was) not met/i.test(line)) {
-      for (const tok of line.split(/[:,]/).slice(1)) {
-        const t = /([A-Za-z0-9_-]{2,})/.exec(tok.trim());
-        if (t) add(t[1]);
-      }
-    }
-  }
-  return [...names].slice(0, 20);
 }
 
 export interface CreateServerInput {
@@ -396,14 +369,31 @@ export class ServerManager {
   }
 
   /** Store an uploaded save into a Load-from-save draft and make it the boot target. */
-  async stageDraftSave(id: string, buffer: Buffer, filename: string): Promise<{ saveName: string }> {
+  async stageDraftSave(
+    id: string,
+    buffer: Buffer,
+    filename: string,
+  ): Promise<{ saveName: string; gameVersion?: string; mods?: { name: string; version: string }[] }> {
     this.getDraft(id);
     const name = sanitizeName(filename.replace(/\.zip$/i, '')) || 'save';
     serverFiles.ensureDirs(id);
     serverFiles.writeSave(id, name, buffer);
     this.repo.update(id, { save_name: name, generate_new_save: 0 } as never);
-    await this.updateDraft(id, { saveStaged: true, saveFileName: name });
-    return { saveName: name };
+
+    // Read what the save needs straight out of its header, so the wizard can show
+    // its mods and Factorio version immediately — no container, no boot.
+    const patch: Partial<DraftState> = { saveStaged: true, saveFileName: name };
+    try {
+      const header = readSaveHeader(serverFiles.savePath(id, name));
+      patch.saveGameVersion = header.gameVersion;
+      patch.saveScenario = header.scenario;
+      patch.saveMods = header.mods;
+    } catch (err) {
+      // A save we can't parse is still usable — the probe remains the backstop.
+      console.warn(`[draft ${id}] could not read save header: ${(err as Error).message}`);
+    }
+    await this.updateDraft(id, patch);
+    return { saveName: name, gameVersion: patch.saveGameVersion, mods: patch.saveMods };
   }
 
   /** Discard a draft (row + dir). No-op-safe on unknown ids. */
@@ -464,7 +454,7 @@ export class ServerManager {
   async probeDraft(
     id: string,
     emit: { line?: (l: string) => void; status?: (s: string) => void } = {},
-    hooks: { downloadMod?: (name: string) => Promise<void> } = {},
+    hooks: { downloadMod?: (name: string, version?: string) => Promise<void> } = {},
   ): Promise<{ ok: boolean; errors: string[] }> {
     const row = this.getDraft(id);
     let source: DraftState['source'] = 'generate';
@@ -493,6 +483,15 @@ export class ServerManager {
     const probeSettings = serverFiles.writeProbeServerSettings(id);
     const onLine = emit.line;
 
+    // 0) Load-from-save: resolve the save's mods from its own header BEFORE booting.
+    // The boot log can't tell us — a headless server silently drops mods it doesn't
+    // have and reports success — so an uploaded save is inspected directly and its
+    // mods fetched at the exact versions the world was built with.
+    if (source === 'save' && serverFiles.saveExists(id, saveName)) {
+      const resolved = await this.resolveSaveMods(id, saveName, emit, hooks);
+      if (resolved.length > 0) return { ok: false, errors: resolved };
+    }
+
     // 1) Generate the map with the real mods — catches map-gen + mod-load failures.
     if (!serverFiles.saveExists(id, saveName)) {
       emit.status?.('Generating map…');
@@ -511,39 +510,12 @@ export class ServerManager {
       }
     }
 
-    // 2) Boot the save — catches hosting/runtime failures. For the Load-from-save flow,
-    // if the boot fails because the save needs mods we don't have, download them from
-    // the log's dependency list and re-probe (probe-driven smart-load, capped).
+    // 2) Boot the save — catches hosting/runtime failures.
     emit.status?.('Booting server to test…');
     const bootArgs = ['--start-server', savePath, '--server-settings', probeSettings, '--mod-directory', '/factorio/mods'];
     const readyPatterns = [/Hosting game/i, /Starting RCON/i, /changing state from\(CreatingGame\) to\(InGame\)/i];
-    for (let attempt = 0; ; ) {
-      const boot = await this.docker.runProbe(row, serverFiles.hostDir(id), bootArgs, { readyPatterns, onLine });
-      if (boot.matched) break;
-
-      if (source === 'save' && hooks.downloadMod && attempt < 4) {
-        const missing = parseMissingMods(boot.logs);
-        if (missing.length > 0) {
-          emit.status?.(`Save needs mods: ${missing.join(', ')} — downloading…`);
-          let got = 0;
-          for (const name of missing) {
-            try {
-              await hooks.downloadMod(name);
-              got++;
-            } catch (e) {
-              emit.line?.(`Could not fetch "${name}": ${(e as Error).message}`);
-            }
-          }
-          if (got > 0) {
-            const modList = serverFiles.readModList(id);
-            for (const name of missing) if (!modList.find((x) => x.name === name)) modList.push({ name, enabled: true });
-            serverFiles.writeModList(id, modList);
-            attempt++;
-            continue; // re-probe with the fetched mods
-          }
-        }
-      }
-
+    const boot = await this.docker.runProbe(row, serverFiles.hostDir(id), bootArgs, { readyPatterns, onLine });
+    if (!boot.matched) {
       if (boot.timedOut)
         return { ok: false, errors: ['Timed out waiting for the server to reach "hosting" — see the log above.'] };
       const errs = extractProbeErrors(boot.logs);
@@ -556,6 +528,72 @@ export class ServerManager {
     // Success: pin the tested save so start() loads exactly what we verified.
     this.repo.update(id, { generate_new_save: 0, save_name: saveName } as never);
     return { ok: true, errors: [] };
+  }
+
+  /**
+   * Make the installed mod set match what an uploaded save actually needs, reading
+   * the requirement from the save's own header rather than from a boot log.
+   *
+   * Bundled expansion mods are switched on in mod-list.json; everything else is
+   * fetched from the portal pinned to the version recorded in the save. Returns the
+   * list of failures (empty means the save's mods are satisfied) — a mod we can't
+   * fetch is fatal for the probe, because booting anyway would silently drop it and
+   * report a healthy server built on a gutted world.
+   */
+  private async resolveSaveMods(
+    id: string,
+    saveName: string,
+    emit: { line?: (l: string) => void; status?: (s: string) => void },
+    hooks: { downloadMod?: (name: string, version?: string) => Promise<void> },
+  ): Promise<string[]> {
+    let header: SaveHeader;
+    try {
+      header = readSaveHeader(serverFiles.savePath(id, saveName));
+    } catch (err) {
+      // An unreadable header shouldn't block creation — fall through to the probe,
+      // which still catches anything that actually stops the server booting.
+      emit.line?.(`Could not read the save's mod list: ${(err as Error).message}`);
+      return [];
+    }
+
+    const bundled = bundledModsFor(header);
+    const portal = portalModsFor(header);
+    emit.status?.(
+      `Save was built with Factorio ${header.gameVersion} and ${header.mods.length} mod(s)`,
+    );
+
+    const modList = serverFiles.readModList(id);
+    const setEnabled = (name: string) => {
+      const e = modList.find((m) => m.name === name);
+      if (e) e.enabled = true;
+      else modList.push({ name, enabled: true });
+    };
+
+    // Bundled expansion mods ship in the image — enabling them is all that's needed.
+    for (const name of bundled) {
+      emit.line?.(`Enabling bundled mod "${name}" (required by the save)`);
+      setEnabled(name);
+    }
+
+    const failures: string[] = [];
+    for (const mod of portal) {
+      if (!hooks.downloadMod) {
+        failures.push(`The save needs "${mod.name}" ${mod.version}, which isn't installed.`);
+        continue;
+      }
+      try {
+        emit.status?.(`Fetching "${mod.name}" ${mod.version} required by the save…`);
+        await hooks.downloadMod(mod.name, mod.version);
+        setEnabled(mod.name);
+      } catch (err) {
+        failures.push(
+          `Could not fetch "${mod.name}" ${mod.version} that the save needs: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    serverFiles.writeModList(id, modList);
+    return failures;
   }
 
   /** Delete drafts past their TTL (row + on-disk dir). Runs on an interval. */

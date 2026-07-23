@@ -281,3 +281,15 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
   border-radius: 999px;
   padding: 1px 7px;
 }
+
+/* Mod chip — e.g. the mods read out of an uploaded save's header */
+.mod-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+}

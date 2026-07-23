@@ -269,8 +269,12 @@ export function serversRouter(ctx: AppContext): Router {
             line: (line) => !aborted && send('log', { line }),
             status: (message) => !aborted && send('status', { message }),
           },
-          // Smart-load: download mods a Load-from-save draft's save requires.
-          { downloadMod: async (name) => void (await ctx.mods.downloadMod(manager.getDraft(id), name)) },
+          // Smart-load: fetch the mods a Load-from-save draft's save requires, pinned
+          // to the versions recorded in the save header.
+          {
+            downloadMod: async (name, version) =>
+              void (await ctx.mods.downloadMod(manager.getDraft(id), name, version)),
+          },
         );
         if (aborted) return;
         if (!result.ok) {

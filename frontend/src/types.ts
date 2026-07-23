@@ -58,6 +58,9 @@ export interface DraftState {
   exchangeString?: string;
   saveStaged?: boolean;
   saveFileName?: string;
+  saveGameVersion?: string;
+  saveScenario?: string;
+  saveMods?: { name: string; version: string }[];
 }
 
 /** Draft summary for the "Continue new server" list. */
