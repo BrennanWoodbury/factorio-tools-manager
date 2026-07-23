@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import type { MapGenSettings, MapGenTemplate } from '../types';
 import { run, toastError } from '../ui';
+import { ExperimentalNote } from './ExperimentalNote';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -353,6 +354,9 @@ export function MapGenEditor({
         (modCtrls.length > 0 ? (
           <>
             <h3 style={{ margin: '4px 0 10px' }}>Resources &amp; terrain (from this server's mods)</h3>
+            <ExperimentalNote style={{ marginBottom: 10 }}>
+              Detected from your mods — controls a mod adds at runtime may be missing.
+            </ExperimentalNote>
             {modCtrls.map(controlSliders)}
           </>
         ) : (

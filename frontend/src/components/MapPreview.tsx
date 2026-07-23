@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { MapGenSettings } from '../types';
 import { toastError } from '../ui';
 import { previewPlanetsForMode } from './MapGenEditor';
+import { ExperimentalNote } from './ExperimentalNote';
 
 /**
  * Renders a map preview PNG for the given (unsaved) settings via a backend one-shot.
@@ -82,6 +83,12 @@ export function MapPreview({
         )}
         <span className="small muted">{activeLabel} · renders your current (unsaved) settings</span>
       </div>
+
+      {mode === 'modded' && (
+        <ExperimentalNote style={{ marginTop: 8 }}>
+          Previews render with this server's mods loaded — some mod sets won't render.
+        </ExperimentalNote>
+      )}
 
       {url && (
         <div style={{ marginTop: 10 }}>

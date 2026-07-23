@@ -1,3 +1,5 @@
+import { ExperimentalNote } from './ExperimentalNote';
+
 /** Game mode: drives the map-gen slider set (which planets show) and Space Age mods. */
 export function GameModeSelect({
   value,
@@ -24,6 +26,11 @@ export function GameModeSelect({
           'Space Age with the Quality mod disabled — per-planet resource sliders.'}
         {value === 'modded' && 'Custom mods (via a modpack). Import an exchange string for modded resources.'}
       </div>
+      {value === 'modded' && (
+        <ExperimentalNote style={{ marginTop: 6 }}>
+          Map generation and previews depend on your mod set — they may not match in-game.
+        </ExperimentalNote>
+      )}
     </div>
   );
 }
