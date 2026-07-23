@@ -81,6 +81,21 @@ export const api = {
   discardDraft: (id: string) => req<void>('DELETE', `/servers/draft/${id}`),
   finalizeDraft: (id: string, start = false) =>
     req<{ server: Server; started: boolean }>('POST', `/servers/draft/${id}/finalize`, { start }),
+  uploadDraftSave: async (id: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`/api/servers/draft/${id}/save`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      const err = (json as { error?: { code: string; message: string } })?.error;
+      throw new ApiError(err?.message ?? `HTTP ${res.status}`, err?.code ?? 'ERROR', res.status);
+    }
+    return json as { saveName: string };
+  },
   getSettings: (id: string) =>
     req<AdvancedSettingsResult>('GET', `/servers/${id}/settings`),
   updateSettings: (id: string, settings: Record<string, unknown>) =>

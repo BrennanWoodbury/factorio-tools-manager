@@ -263,10 +263,15 @@ export function serversRouter(ctx: AppContext): Router {
           }
         }
 
-        const result = await manager.probeDraft(id, {
-          line: (line) => !aborted && send('log', { line }),
-          status: (message) => !aborted && send('status', { message }),
-        });
+        const result = await manager.probeDraft(
+          id,
+          {
+            line: (line) => !aborted && send('log', { line }),
+            status: (message) => !aborted && send('status', { message }),
+          },
+          // Smart-load: download mods a Load-from-save draft's save requires.
+          { downloadMod: async (name) => void (await ctx.mods.downloadMod(manager.getDraft(id), name)) },
+        );
         if (aborted) return;
         if (!result.ok) {
           send('failed', { errors: result.errors });
@@ -292,6 +297,18 @@ export function serversRouter(ctx: AppContext): Router {
         clearInterval(heartbeat);
         res.end();
       }
+    }),
+  );
+
+  // Upload a save into a Load-from-save draft; makes it the boot target.
+  r.post(
+    '/draft/:id/save',
+    upload.single('file'),
+    asyncHandler(async (req, res) => {
+      manager.getDraft(req.params.id); // 404 unless a draft
+      if (!req.file) throw new ValidationError('Expected a multipart file field named "file"');
+      const filename = (req.body?.name as string) || req.file.originalname || 'save.zip';
+      res.status(201).json(await manager.stageDraftSave(req.params.id, req.file.buffer, filename));
     }),
   );
 

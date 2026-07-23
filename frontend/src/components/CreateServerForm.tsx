@@ -73,6 +73,8 @@ export function CreateServerForm({
   const [exchangeString, setExchangeString] = useState('');
   const [importDecoded, setImportDecoded] = useState(false);
   const [decoding, setDecoding] = useState(false);
+  const [savedSaveName, setSavedSaveName] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -106,7 +108,8 @@ export function CreateServerForm({
     gameMode !== 'space_age' ||
     factorioTag !== 'stable' ||
     mapGenEdited ||
-    modsEdited;
+    modsEdited ||
+    savedSaveName != null;
 
   // Resume an existing draft: hydrate the form from its saved state.
   useEffect(() => {
@@ -126,6 +129,7 @@ export function CreateServerForm({
         if (state.exchangeString) setExchangeString(state.exchangeString);
         // An import draft with both a string and decoded settings resumes at stage 2.
         if (state.source === 'import' && state.exchangeString && state.mapGen) setImportDecoded(true);
+        if (state.saveStaged && state.saveFileName) setSavedSaveName(state.saveFileName);
       } catch (err) {
         toastError((err as Error).message);
       }
@@ -209,6 +213,23 @@ export function CreateServerForm({
     }
   };
 
+  // Load-from-save: upload a .zip into the draft and make it the boot target.
+  const uploadSave = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f || !draftId) return;
+    setUploading(true);
+    try {
+      const { saveName } = await api.uploadDraftSave(draftId, f);
+      setSavedSaveName(saveName);
+      toastSuccess(`Uploaded “${saveName}”`);
+    } catch (err) {
+      toastError((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const discardIfDraft = async () => {
     if (draftId && !finalized.current) await api.discardDraft(draftId).catch(() => {});
   };
@@ -227,6 +248,7 @@ export function CreateServerForm({
     setMapSettings(null);
     setExchangeString('');
     setImportDecoded(false);
+    setSavedSaveName(null);
     setMapGenEdited(false);
     setModsEdited(false);
     setPhase('mode');
@@ -304,8 +326,11 @@ export function CreateServerForm({
 
   const resetProbe = () => setProbe({ phase: 'idle', status: '', log: [], errors: [] });
 
-  // Generate is always ready; Import is ready once decoded. (Save lands in a later slice.)
-  const finalizeReady = source === 'generate' || (source === 'import' && importDecoded);
+  // Generate is always ready; Import once decoded; Save once a file is uploaded.
+  const finalizeReady =
+    source === 'generate' ||
+    (source === 'import' && importDecoded) ||
+    (source === 'save' && !!savedSaveName);
   const canCreate = finalizeReady && name.trim().length > 0 && subdomain.trim().length > 0;
 
   return (
@@ -517,10 +542,23 @@ export function CreateServerForm({
 
             {source === 'save' && (
               <div style={{ marginTop: 12 }}>
-                <div className="small" style={{ color: 'var(--accent)' }}>
-                  Uploading a save (and smart-loading its mods) arrives in a follow-up. The wizard
-                  shell and this draft are saved in the meantime.
-                </div>
+                <label>Save file (.zip)</label>
+                <input type="file" accept=".zip" disabled={uploading} onChange={(e) => void uploadSave(e)} />
+                {uploading ? (
+                  <div className="small muted" style={{ marginTop: 8 }}>
+                    Uploading…
+                  </div>
+                ) : savedSaveName ? (
+                  <div className="small" style={{ marginTop: 8, color: 'var(--green)' }}>
+                    Uploaded “{savedSaveName}” ✓ — Test &amp; Create boots it, downloading any mods
+                    it needs.
+                  </div>
+                ) : (
+                  <div className="small muted" style={{ marginTop: 8 }}>
+                    Upload an existing Factorio save. Test &amp; Create smart-loads any mods the save
+                    requires from the portal, then boots it to verify.
+                  </div>
+                )}
               </div>
             )}
 

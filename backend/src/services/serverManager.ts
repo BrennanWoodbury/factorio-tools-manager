@@ -36,6 +36,34 @@ function extractProbeErrors(logs: string): string[] {
   return [...new Set(out)].slice(-12);
 }
 
+/**
+ * Parse the mod names a save requires but that aren't installed, out of Factorio's
+ * boot log — so we can auto-download them (probe-driven smart-load for the save flow).
+ * Heuristic across a few message shapes; verified defensively (non-matches just mean
+ * we surface the raw error instead).
+ */
+function parseMissingMods(logs: string): string[] {
+  const names = new Set<string>();
+  const add = (n?: string) => {
+    const name = n?.trim();
+    if (name && !/^(base|the|a|an|mod|mods)$/i.test(name)) names.add(name);
+  };
+  for (const line of logs.split('\n')) {
+    let m: RegExpExecArray | null;
+    if ((m = /missing (?:mod|dependenc(?:y|ies))[:\s]+["']?([A-Za-z0-9][A-Za-z0-9 _-]*?)["']?\s*(?:[<>=(]|$)/i.exec(line)))
+      add(m[1]);
+    if ((m = /mod ["']([^"']+)["'][^\n]*(?:not found|is missing|not installed)/i.exec(line))) add(m[1]);
+    // "Dependencies were not met: X >= 1.0, Y"
+    if (/dependenc(?:y|ies) (?:were|was) not met/i.test(line)) {
+      for (const tok of line.split(/[:,]/).slice(1)) {
+        const t = /([A-Za-z0-9_-]{2,})/.exec(tok.trim());
+        if (t) add(t[1]);
+      }
+    }
+  }
+  return [...names].slice(0, 20);
+}
+
 export interface CreateServerInput {
   name: string;
   subdomain: string;
@@ -367,6 +395,17 @@ export class ServerManager {
     return this.repo.getById(id)!;
   }
 
+  /** Store an uploaded save into a Load-from-save draft and make it the boot target. */
+  async stageDraftSave(id: string, buffer: Buffer, filename: string): Promise<{ saveName: string }> {
+    this.getDraft(id);
+    const name = sanitizeName(filename.replace(/\.zip$/i, '')) || 'save';
+    serverFiles.ensureDirs(id);
+    serverFiles.writeSave(id, name, buffer);
+    this.repo.update(id, { save_name: name, generate_new_save: 0 } as never);
+    await this.updateDraft(id, { saveStaged: true, saveFileName: name });
+    return { saveName: name };
+  }
+
   /** Discard a draft (row + dir). No-op-safe on unknown ids. */
   discardDraft(id: string): void {
     const row = this.repo.getById(id);
@@ -425,8 +464,15 @@ export class ServerManager {
   async probeDraft(
     id: string,
     emit: { line?: (l: string) => void; status?: (s: string) => void } = {},
+    hooks: { downloadMod?: (name: string) => Promise<void> } = {},
   ): Promise<{ ok: boolean; errors: string[] }> {
     const row = this.getDraft(id);
+    let source: DraftState['source'] = 'generate';
+    try {
+      if (row.draft_state_json) source = (JSON.parse(row.draft_state_json) as DraftState).source;
+    } catch {
+      /* default generate */
+    }
     serverFiles.ensureDirs(id);
     serverFiles.writeServerSettings(row, getGlobalAdvancedSettings(this.db));
     // Apply the game mode's Space Age enablement to the mod list (as start() does).
@@ -465,18 +511,39 @@ export class ServerManager {
       }
     }
 
-    // 2) Boot the generated save — catches hosting/runtime failures.
+    // 2) Boot the save — catches hosting/runtime failures. For the Load-from-save flow,
+    // if the boot fails because the save needs mods we don't have, download them from
+    // the log's dependency list and re-probe (probe-driven smart-load, capped).
     emit.status?.('Booting server to test…');
-    const boot = await this.docker.runProbe(
-      row,
-      serverFiles.hostDir(id),
-      ['--start-server', savePath, '--server-settings', probeSettings, '--mod-directory', '/factorio/mods'],
-      {
-        readyPatterns: [/Hosting game/i, /Starting RCON/i, /changing state from\(CreatingGame\) to\(InGame\)/i],
-        onLine,
-      },
-    );
-    if (!boot.matched) {
+    const bootArgs = ['--start-server', savePath, '--server-settings', probeSettings, '--mod-directory', '/factorio/mods'];
+    const readyPatterns = [/Hosting game/i, /Starting RCON/i, /changing state from\(CreatingGame\) to\(InGame\)/i];
+    for (let attempt = 0; ; ) {
+      const boot = await this.docker.runProbe(row, serverFiles.hostDir(id), bootArgs, { readyPatterns, onLine });
+      if (boot.matched) break;
+
+      if (source === 'save' && hooks.downloadMod && attempt < 4) {
+        const missing = parseMissingMods(boot.logs);
+        if (missing.length > 0) {
+          emit.status?.(`Save needs mods: ${missing.join(', ')} — downloading…`);
+          let got = 0;
+          for (const name of missing) {
+            try {
+              await hooks.downloadMod(name);
+              got++;
+            } catch (e) {
+              emit.line?.(`Could not fetch "${name}": ${(e as Error).message}`);
+            }
+          }
+          if (got > 0) {
+            const modList = serverFiles.readModList(id);
+            for (const name of missing) if (!modList.find((x) => x.name === name)) modList.push({ name, enabled: true });
+            serverFiles.writeModList(id, modList);
+            attempt++;
+            continue; // re-probe with the fetched mods
+          }
+        }
+      }
+
       if (boot.timedOut)
         return { ok: false, errors: ['Timed out waiting for the server to reach "hosting" — see the log above.'] };
       const errs = extractProbeErrors(boot.logs);
