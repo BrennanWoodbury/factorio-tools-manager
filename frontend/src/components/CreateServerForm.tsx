@@ -4,6 +4,8 @@ import type { DraftSource, DraftState, MapGenSettings } from '../types';
 import { toastError, toastSuccess } from '../ui';
 import { FactorioTagSelect } from './FactorioTagSelect';
 import { MapGenEditor } from './MapGenEditor';
+import { MapPreview } from './MapPreview';
+import { WizardMods } from './WizardMods';
 import { DnsNamePreview } from './DnsNamePreview';
 import { GameModeSelect } from './GameModeSelect';
 import { Collapsible } from './Collapsible';
@@ -66,6 +68,7 @@ export function CreateServerForm({
   const [gameMode, setGameMode] = useState('space_age');
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
   const [mapGenEdited, setMapGenEdited] = useState(false);
+  const [modsEdited, setModsEdited] = useState(false);
   const [exchangeString, setExchangeString] = useState('');
 
   const [busy, setBusy] = useState(false);
@@ -99,7 +102,8 @@ export function CreateServerForm({
     maxPlayers !== 0 ||
     gameMode !== 'space_age' ||
     factorioTag !== 'stable' ||
-    mapGenEdited;
+    mapGenEdited ||
+    modsEdited;
 
   // Resume an existing draft: hydrate the form from its saved state.
   useEffect(() => {
@@ -181,6 +185,7 @@ export function CreateServerForm({
     await discardIfDraft();
     setDraftId(null);
     setMapGenEdited(false);
+    setModsEdited(false);
     setPhase('mode');
   };
 
@@ -376,16 +381,35 @@ export function CreateServerForm({
                     follow-up.
                   </div>
                   {mapGen ? (
-                    <MapGenEditor
-                      value={mapGen}
-                      onChange={(v) => {
-                        setMapGen(v);
-                        setMapGenEdited(true);
-                      }}
-                      mode={gameMode}
-                    />
+                    <>
+                      {draftId && <MapPreview serverId={draftId} mapGen={mapGen} />}
+                      <MapGenEditor
+                        value={mapGen}
+                        onChange={(v) => {
+                          setMapGen(v);
+                          setMapGenEdited(true);
+                        }}
+                        mode={gameMode}
+                      />
+                    </>
                   ) : (
                     <div className="muted small">Loading defaults…</div>
+                  )}
+                </Collapsible>
+
+                <Collapsible
+                  title="Mods"
+                  hint="Optional — add mods from the portal. Included in the pre-flight test."
+                  style={{ marginTop: 12 }}
+                >
+                  {draftId && (
+                    <WizardMods
+                      draftId={draftId}
+                      onSaved={(mods) => {
+                        setModsEdited(true);
+                        void api.updateDraft(draftId, { mods }).catch(() => {});
+                      }}
+                    />
                   )}
                 </Collapsible>
               </>
