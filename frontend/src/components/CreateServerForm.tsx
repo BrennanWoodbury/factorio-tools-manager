@@ -7,6 +7,7 @@ import { MapGenEditor } from './MapGenEditor';
 import { DnsNamePreview } from './DnsNamePreview';
 import { GameModeSelect } from './GameModeSelect';
 import { Collapsible } from './Collapsible';
+import { ConfirmDialog } from './ConfirmDialog';
 import { IconTerminal, IconUpload, IconWorld } from './icons';
 
 const MODES: {
@@ -64,11 +65,25 @@ export function CreateServerForm({
   const [factorioTag, setFactorioTag] = useState('stable');
   const [gameMode, setGameMode] = useState('space_age');
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
+  const [mapGenEdited, setMapGenEdited] = useState(false);
   const [exchangeString, setExchangeString] = useState('');
 
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [confirmChange, setConfirmChange] = useState(false);
   const finalized = useRef(false);
+
+  // Whether the form holds anything worth warning about before discarding on "Change".
+  // (Loading map-gen defaults by opening the drawer doesn't count — only real edits.)
+  const isDirty =
+    name.trim() !== '' ||
+    subdomain.trim() !== '' ||
+    description.trim() !== '' ||
+    exchangeString.trim() !== '' ||
+    maxPlayers !== 0 ||
+    gameMode !== 'space_age' ||
+    factorioTag !== 'stable' ||
+    mapGenEdited;
 
   // Resume an existing draft: hydrate the form from its saved state.
   useEffect(() => {
@@ -139,10 +154,17 @@ export function CreateServerForm({
     if (draftId && !finalized.current) await api.discardDraft(draftId).catch(() => {});
   };
 
-  const back = async () => {
-    // Switching mode means a different draft — discard the current one.
+  // "Change" mode discards the current draft. Confirm first only if there's content
+  // to lose; a pristine draft switches silently.
+  const back = () => {
+    if (isDirty) setConfirmChange(true);
+    else void doBack();
+  };
+  const doBack = async () => {
+    setConfirmChange(false);
     await discardIfDraft();
     setDraftId(null);
+    setMapGenEdited(false);
     setPhase('mode');
   };
 
@@ -176,6 +198,7 @@ export function CreateServerForm({
   const canCreate = finalizeReady && name.trim().length > 0 && subdomain.trim().length > 0;
 
   return (
+    <>
     <div
       style={{
         position: 'fixed',
@@ -238,7 +261,7 @@ export function CreateServerForm({
               <h2 style={{ margin: 0 }}>
                 {MODES.find((m) => m.source === source)?.title ?? 'New server'}
               </h2>
-              <button className="ghost small" onClick={() => void back()}>
+              <button className="ghost small" onClick={back}>
                 ← Change
               </button>
             </div>
@@ -290,7 +313,14 @@ export function CreateServerForm({
                     follow-up.
                   </div>
                   {mapGen ? (
-                    <MapGenEditor value={mapGen} onChange={setMapGen} mode={gameMode} />
+                    <MapGenEditor
+                      value={mapGen}
+                      onChange={(v) => {
+                        setMapGen(v);
+                        setMapGenEdited(true);
+                      }}
+                      mode={gameMode}
+                    />
                   ) : (
                     <div className="muted small">Loading defaults…</div>
                   )}
@@ -356,5 +386,15 @@ export function CreateServerForm({
         )}
       </div>
     </div>
+      {confirmChange && (
+        <ConfirmDialog
+          title="Discard this draft?"
+          body="Switching flow deletes this draft and everything you've entered."
+          confirmLabel="Discard & change"
+          onConfirm={() => void doBack()}
+          onCancel={() => setConfirmChange(false)}
+        />
+      )}
+    </>
   );
 }
