@@ -63,6 +63,20 @@ export const config = {
   // owned by a matching host user. Empty => use the image default.
   puid: opt('PUID', ''),
   pgid: opt('PGID', ''),
+
+  // Blueprint-library icons. The headless image ships no graphics at all, so item
+  // icons are harvested from a real Factorio install and cached per game version.
+  //
+  // FACTORIO_INSTALL_DIR: optional path to an install the manager can read (the
+  // directory holding `data/base/info.json`). Used only when its version matches
+  // exactly, and it saves a multi-GB download when it does.
+  //
+  // ICON_DOWNLOAD: when true (default) and no matching install is available, the
+  // build is fetched from factorio.com using the configured factorio.com account —
+  // the same credentials already used for mod downloads. Assets are extracted
+  // locally and never redistributed.
+  factorioInstallDir: opt('FACTORIO_INSTALL_DIR', ''),
+  iconDownloadEnabled: opt('ICON_DOWNLOAD', 'true') !== 'false',
   // How the backend reaches a server's RCON:
   //  - 'network'  : connect to <containerName>:27015 over factorioNetwork
   //                 (correct when the manager runs as a container). Default.
