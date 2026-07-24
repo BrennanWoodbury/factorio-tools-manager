@@ -143,11 +143,58 @@ const MIGRATIONS: Migration[] = [
   },
 ];
 
-export function runMigrations(db: DB): void {
-  const row = db.prepare<{ user_version: number }>('PRAGMA user_version').get();
-  const current = row?.user_version ?? 0;
-  for (const m of MIGRATIONS) {
-    if (m.version <= current) continue;
+/** Highest migration this build knows how to apply. */
+export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;
+
+/** The schema version recorded in the database (0 for a fresh one). */
+export function schemaVersion(db: DB): number {
+  return db.prepare<{ user_version: number }>('PRAGMA user_version').get()?.user_version ?? 0;
+}
+
+/**
+ * Thrown when the database was written by a newer build than this one.
+ *
+ * Migrations only run forward, so an older binary would otherwise skip them all
+ * and then query a schema it doesn't understand — and that isn't theoretical:
+ * migration v3 renames columns, so the reads would simply fail, scattered and
+ * unexplained. Refusing to open is the kinder failure, and it's a realistic one
+ * now that rolling back to a previous image is a supported move.
+ */
+export class SchemaTooNewError extends Error {
+  constructor(
+    readonly found: number,
+    readonly supported: number,
+  ) {
+    super(
+      `This database is at schema v${found}, but this version of the manager only understands ` +
+        `up to v${supported}. It was last opened by a newer release. Roll forward to that ` +
+        `release (or newer) to start — downgrading the database is not supported. If you meant ` +
+        `to go back, restore the snapshot taken before the upgrade from the db-backups directory.`,
+    );
+    this.name = 'SchemaTooNewError';
+  }
+}
+
+/**
+ * Apply every migration newer than the database's recorded version.
+ *
+ * `onBeforeMigrate` fires once, only when there is actually work to do, so a
+ * snapshot can be taken while the schema is still readable by the build that
+ * wrote it — the thing that makes a downgrade recoverable rather than terminal.
+ */
+export function runMigrations(
+  db: DB,
+  opts: { onBeforeMigrate?: (fromVersion: number) => void } = {},
+): void {
+  const current = schemaVersion(db);
+  if (current > LATEST_SCHEMA_VERSION) throw new SchemaTooNewError(current, LATEST_SCHEMA_VERSION);
+
+  const pending = MIGRATIONS.filter((m) => m.version > current);
+  if (pending.length === 0) return;
+
+  opts.onBeforeMigrate?.(current);
+
+  for (const m of pending) {
     db.transaction(() => {
       m.up(db);
       // user_version can't be parameterised; version is an integer literal we control.
@@ -156,6 +203,3 @@ export function runMigrations(db: DB): void {
     console.log(`[db] applied migration v${m.version}`);
   }
 }
-
-/** Highest known migration version (for tests / sanity). */
-export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;
