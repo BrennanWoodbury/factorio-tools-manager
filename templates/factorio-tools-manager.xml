@@ -67,6 +67,7 @@ Cloudflare DNS is optional and configured inside the app.
 
   <Date>2026-07-24</Date>
   <MinVer>6.12</MinVer>
+  <License>MIT</License>
 
   <!-- Web UI. The container always listens on 8080; change the host side only. -->
   <Config Name="WebUI Port" Target="8080" Default="8080" Mode="tcp"

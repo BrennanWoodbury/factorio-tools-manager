@@ -470,3 +470,14 @@ Realistic failure modes return structured JSON errors (`{ error: { code, message
 - RCON is never exposed off-host.
 - The Docker socket is mounted into the manager (root-equivalent on the host) — treat access to
   the UI accordingly.
+
+---
+
+## License
+
+[MIT](LICENSE).
+
+Factorio itself, the Space Age expansion and the official expansion mods are not covered by
+this licence — they're Wube Software's, require your own copy of the game, and are used here
+through the [factoriotools](https://hub.docker.com/r/factoriotools/factorio) image. Nothing in
+this project redistributes game assets.
