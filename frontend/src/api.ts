@@ -7,6 +7,7 @@ import type {
   DraftResult,
   DraftState,
   FactorioAccount,
+  FactorioImageInfo,
   GlobalDefaults,
   MapGen,
   MapGenTemplate,
@@ -61,6 +62,8 @@ export const api = {
 
   // system
   systemStatus: () => req<SystemStatus>('GET', '/system/status'),
+  factorioImageInfo: (tag: string) =>
+    req<FactorioImageInfo>('GET', `/system/factorio-image?tag=${encodeURIComponent(tag)}`),
 
   // servers
   listServers: () => req<{ servers: Server[] }>('GET', '/servers'),

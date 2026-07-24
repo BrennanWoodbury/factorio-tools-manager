@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { DraftSource, DraftState, MapGenSettings } from '../types';
 import { toastError, toastSuccess } from '../ui';
 import { FactorioTagSelect } from './FactorioTagSelect';
+import { useFactorioImage } from '../useFactorioImage';
 import { MapGenEditor } from './MapGenEditor';
 import { MapPreview } from './MapPreview';
 import { WizardMods } from './WizardMods';
@@ -65,6 +66,8 @@ export function CreateServerForm({
   const [maxPlayers, setMaxPlayers] = useState(0);
   const [description, setDescription] = useState('');
   const [factorioTag, setFactorioTag] = useState('stable');
+  // Which game modes the chosen Factorio version can actually run (hint only).
+  const imageInfo = useFactorioImage(factorioTag);
   const [gameMode, setGameMode] = useState('space_age');
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
   const [mapSettings, setMapSettings] = useState<MapGenSettings | null>(null);
@@ -442,7 +445,7 @@ export function CreateServerForm({
             {source === 'generate' && (
               <>
                 <div style={{ marginTop: 12 }}>
-                  <GameModeSelect value={gameMode} onChange={setGameMode} />
+                  <GameModeSelect value={gameMode} onChange={setGameMode} modeIssues={imageInfo?.modeIssues} />
                 </div>
                 <Collapsible
                   title="Map generation"
@@ -531,7 +534,7 @@ export function CreateServerForm({
                       These are the settings your string maps to. Pick the matching game mode,
                       preview, and tweak — then Test &amp; Create.
                     </div>
-                    <GameModeSelect value={gameMode} onChange={setGameMode} />
+                    <GameModeSelect value={gameMode} onChange={setGameMode} modeIssues={imageInfo?.modeIssues} />
                     <div style={{ marginTop: 12 }}>
                       {draftId && <MapPreview serverId={draftId} mapGen={mapGen} mode={gameMode} />}
                       <MapGenEditor

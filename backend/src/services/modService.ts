@@ -6,6 +6,7 @@ import type { DB } from '../db/index.js';
 import { AppError, ValidationError } from '../lib/errors.js';
 import { getFactorioAccount } from './factorioAccount.js';
 import { serverFiles, type ModEntry } from './serverFiles.js';
+import { KNOWN_BUNDLED_MODS } from './imageProfile.js';
 
 const MOD_PORTAL_BASE = 'https://mods.factorio.com';
 
@@ -46,12 +47,15 @@ const CATALOG_TTL_MS = 6 * 60 * 60 * 1000; // 6h
 
 /**
  * Mods that ship with the game data and must NOT be downloaded from the mod
- * portal: `base` (always) and the official Space Age expansion mods, which come
- * bundled with the DLC. They can be enabled in mod-list.json but the manager
- * never tries to fetch them (that would fail — they aren't standard portal
- * downloads). The server uses the copies present in its own game data.
+ * portal: `base` (always) and the official expansion mods, which come bundled
+ * with the DLC. They can be enabled in mod-list.json but the manager never tries
+ * to fetch them (that would fail — they aren't standard portal downloads). The
+ * server uses the copies present in its own game data.
+ *
+ * Deliberately the cross-version superset rather than a per-image list: whether a
+ * name is portal-fetchable can't depend on which image a given server runs.
  */
-export const BUNDLED_MODS = new Set(['base', 'space-age', 'quality', 'elevated-rails']);
+const BUNDLED_MODS = KNOWN_BUNDLED_MODS;
 
 /**
  * Mod management via the Factorio Mod Portal API.

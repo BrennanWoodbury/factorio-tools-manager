@@ -137,6 +137,20 @@ export interface ServerStatus {
   playersError?: string;
 }
 
+/**
+ * What a Factorio image supports, read from the image's own bundled mods.
+ * `known: false` means it hasn't been pulled yet — the UI must not draw
+ * conclusions from that; start/Test & Create do the authoritative check.
+ */
+export interface FactorioImageInfo {
+  known: boolean;
+  image: string;
+  gameVersion?: string;
+  bundledMods?: string[];
+  /** Game mode → why it can't run on this image. Absent key = supported. */
+  modeIssues?: Record<string, string>;
+}
+
 export interface SaveInfo {
   name: string;
   sizeBytes: number;

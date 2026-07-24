@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import zlib from 'node:zlib';
+import { KNOWN_BUNDLED_MODS } from './imageProfile.js';
 
 /**
  * Reads what a Factorio save needs — game version, scenario and full mod list —
@@ -11,9 +12,6 @@ import zlib from 'node:zlib';
  * save's own header is authoritative, available before any container starts, and
  * carries the exact mod versions the world was built with.
  */
-
-/** Mods that ship inside the Factorio image — never downloaded from the portal. */
-const BUNDLED_MODS = new Set(['base', 'space-age', 'quality', 'elevated-rails']);
 
 export interface SaveMod {
   name: string;
@@ -189,12 +187,22 @@ export function readSaveHeader(savePath: string): SaveHeader {
  * The mods a save needs that must come from the mod portal — everything except
  * `base` and the expansion mods bundled in the image (those are enabled through
  * mod-list.json instead).
+ *
+ * `bundled` defaults to the cross-version superset. Callers holding an
+ * `ImageProfile` should pass its mod names, so a save from a newer Factorio isn't
+ * sent to the portal for a mod that release started shipping (2.1's `recycler`).
  */
-export function portalModsFor(header: SaveHeader): SaveMod[] {
-  return header.mods.filter((m) => !BUNDLED_MODS.has(m.name));
+export function portalModsFor(
+  header: SaveHeader,
+  bundled: ReadonlySet<string> = KNOWN_BUNDLED_MODS,
+): SaveMod[] {
+  return header.mods.filter((m) => !bundled.has(m.name));
 }
 
 /** The bundled expansion mods a save uses, e.g. ["space-age","quality"]. */
-export function bundledModsFor(header: SaveHeader): string[] {
-  return header.mods.filter((m) => m.name !== 'base' && BUNDLED_MODS.has(m.name)).map((m) => m.name);
+export function bundledModsFor(
+  header: SaveHeader,
+  bundled: ReadonlySet<string> = KNOWN_BUNDLED_MODS,
+): string[] {
+  return header.mods.filter((m) => m.name !== 'base' && bundled.has(m.name)).map((m) => m.name);
 }

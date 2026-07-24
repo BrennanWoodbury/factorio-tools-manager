@@ -11,6 +11,12 @@ import { serverFiles, sanitizeName, type ModEntry } from './serverFiles.js';
 import { getFactorioAccount } from './factorioAccount.js';
 import { readSaveHeader, portalModsFor, bundledModsFor, type SaveHeader } from './saveInspect.js';
 import {
+  ImageProfileService,
+  modEnablementFor,
+  gameModeIssue,
+  type ImageProfile,
+} from './imageProfile.js';
+import {
   CASCADE,
   getGlobalDefaults,
   getGlobalAdvancedSettings,
@@ -73,25 +79,6 @@ const GAME_MODES = ['vanilla', 'space_age', 'space_age_no_quality', 'modded'] as
 const cleanGameMode = (m: string | undefined): string =>
   (GAME_MODES as readonly string[]).includes(m ?? '') ? (m as string) : 'space_age';
 
-/**
- * Which of the bundled Space Age mods a mode forces enabled/disabled (applied to
- * mod-list.json on start, other mods preserved). `null` = don't touch (Modded — the
- * modpack manages mods). Space Age runs fine without `quality` (verified: it just
- * sets FeatureFlag quality=false).
- */
-function spaceAgeModEnablement(mode: string): Record<string, boolean> | null {
-  switch (mode) {
-    case 'vanilla':
-      return { 'space-age': false, quality: false, 'elevated-rails': false };
-    case 'space_age_no_quality':
-      return { 'space-age': true, quality: false, 'elevated-rails': true };
-    case 'modded':
-      return null;
-    case 'space_age':
-    default:
-      return { 'space-age': true, quality: true, 'elevated-rails': true };
-  }
-}
 // Valid Docker image tag (also allow empty to mean "use the global default").
 const TAG_RE = /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}$/;
 
@@ -101,6 +88,9 @@ const TAG_RE = /^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}$/;
  * best-effort/rolled-back for the external side effects (DNS record).
  */
 export class ServerManager {
+  /** Bundled-mod graph per Factorio image, read from the image and cached. */
+  readonly imageProfiles: ImageProfileService;
+
   constructor(
     private readonly db: DB,
     private readonly repo: ServersRepo,
@@ -109,7 +99,35 @@ export class ServerManager {
     private readonly dns: DnsService,
     private readonly rcon: RconService,
     private readonly config: AppConfig,
-  ) {}
+  ) {
+    this.imageProfiles = new ImageProfileService(docker);
+  }
+
+  /**
+   * Force the game mode's bundled-mod enablement into a server's mod-list.json,
+   * preserving every other entry. Which mods that means is derived from the
+   * image's own dependency graph, not hardcoded — see imageProfile.ts. No-op for
+   * Modded, where the applied modpack owns the list.
+   *
+   * Throws if the mode can't run on this image at all (Space Age without Quality
+   * on 2.0.x), so the failure is a clear message rather than a mod-loader error
+   * buried in the container log.
+   */
+  private async applyGameModeMods(row: ServerRow): Promise<void> {
+    const profile = await this.imageProfiles.forServer(row);
+    const issue = gameModeIssue(row.game_mode, profile);
+    if (issue) throw new ValidationError(issue);
+
+    const enablement = modEnablementFor(row.game_mode, profile);
+    if (!enablement) return;
+    const modList = serverFiles.readModList(row.id);
+    for (const [name, enabled] of Object.entries(enablement)) {
+      const entry = modList.find((m) => m.name === name);
+      if (entry) entry.enabled = enabled;
+      else modList.push({ name, enabled });
+    }
+    serverFiles.writeModList(row.id, modList);
+  }
 
   private validateSubdomain(subdomain: string): void {
     if (!SUBDOMAIN_RE.test(subdomain)) {
@@ -465,16 +483,13 @@ export class ServerManager {
     }
     serverFiles.ensureDirs(id);
     serverFiles.writeServerSettings(row, getGlobalAdvancedSettings(this.db));
-    // Apply the game mode's Space Age enablement to the mod list (as start() does).
-    const enablement = spaceAgeModEnablement(row.game_mode);
-    if (enablement) {
-      const modList = serverFiles.readModList(id);
-      for (const [name, enabled] of Object.entries(enablement)) {
-        const e = modList.find((m) => m.name === name);
-        if (e) e.enabled = enabled;
-        else modList.push({ name, enabled });
-      }
-      serverFiles.writeModList(id, modList);
+    // Apply the game mode's bundled-mod enablement to the mod list (as start() does).
+    // An impossible mode is reported here rather than thrown: the caller is streaming
+    // this to the wizard, where it belongs in the result list like any other failure.
+    try {
+      await this.applyGameModeMods(row);
+    } catch (err) {
+      return { ok: false, errors: [(err as Error).message] };
     }
     serverFiles.writeMapGenSettings(row);
 
@@ -488,7 +503,7 @@ export class ServerManager {
     // have and reports success — so an uploaded save is inspected directly and its
     // mods fetched at the exact versions the world was built with.
     if (source === 'save' && serverFiles.saveExists(id, saveName)) {
-      const resolved = await this.resolveSaveMods(id, saveName, emit, hooks);
+      const resolved = await this.resolveSaveMods(row, saveName, emit, hooks);
       if (resolved.length > 0) return { ok: false, errors: resolved };
     }
 
@@ -541,11 +556,12 @@ export class ServerManager {
    * report a healthy server built on a gutted world.
    */
   private async resolveSaveMods(
-    id: string,
+    row: ServerRow,
     saveName: string,
     emit: { line?: (l: string) => void; status?: (s: string) => void },
     hooks: { downloadMod?: (name: string, version?: string) => Promise<void> },
   ): Promise<string[]> {
+    const id = row.id;
     let header: SaveHeader;
     try {
       header = readSaveHeader(serverFiles.savePath(id, saveName));
@@ -556,8 +572,17 @@ export class ServerManager {
       return [];
     }
 
-    const bundled = bundledModsFor(header);
-    const portal = portalModsFor(header);
+    // Split against what this image actually ships, so a save from a newer Factorio
+    // doesn't send a newly-bundled mod (2.1's `recycler`) to the mod portal.
+    let profile: ImageProfile | null = null;
+    try {
+      profile = await this.imageProfiles.forServer(row);
+    } catch {
+      /* fall back to the cross-version superset */
+    }
+    const bundledNames = profile ? new Set(profile.mods.keys()) : undefined;
+    const bundled = bundledModsFor(header, bundledNames);
+    const portal = portalModsFor(header, bundledNames);
     emit.status?.(
       `Save was built with Factorio ${header.gameVersion} and ${header.mods.length} mod(s)`,
     );
@@ -898,18 +923,9 @@ export class ServerManager {
     // Recreate the container each start so it always reflects current config
     // (env vars, ports). Data lives in the bind mount, so this is cheap.
     serverFiles.writeServerSettings(row, getGlobalAdvancedSettings(this.db));
-    // Enforce the game mode's Space Age enablement in the mod list, preserving any
-    // other mods. Modded (null) leaves the mod list to the applied modpack.
-    const enablement = spaceAgeModEnablement(row.game_mode);
-    if (enablement) {
-      const modList = serverFiles.readModList(id);
-      for (const [name, enabled] of Object.entries(enablement)) {
-        const e = modList.find((m) => m.name === name);
-        if (e) e.enabled = enabled;
-        else modList.push({ name, enabled });
-      }
-      serverFiles.writeModList(id, modList);
-    }
+    // Enforce the game mode's bundled-mod enablement in the mod list, preserving any
+    // other mods. Modded leaves the mod list to the applied modpack.
+    await this.applyGameModeMods(row);
     // Custom map-gen settings (if any) written to config/ so the image's `--create`
     // (GENERATE_NEW_SAVE=true, or first start with no saves) honours them; also heals
     // any stale incomplete map-settings.json left by an earlier build.
@@ -1012,16 +1028,7 @@ export class ServerManager {
     // bundled-defaults path untouched (no regression).
     const planet = opts.planet;
     if (planet && planet !== 'nauvis') {
-      const enablement = spaceAgeModEnablement(row.game_mode);
-      if (enablement) {
-        const modList = serverFiles.readModList(id);
-        for (const [name, enabled] of Object.entries(enablement)) {
-          const e = modList.find((m) => m.name === name);
-          if (e) e.enabled = enabled;
-          else modList.push({ name, enabled });
-        }
-        serverFiles.writeModList(id, modList);
-      }
+      await this.applyGameModeMods(row);
       args.push('--mod-directory', '/factorio/mods');
     }
     if (planet) args.push('--map-preview-planet', planet);

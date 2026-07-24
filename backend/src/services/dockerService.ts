@@ -62,7 +62,7 @@ export class DockerService {
    * `factoriotools/factorio:stable` + tag `latest` => `factoriotools/factorio:latest`);
    * empty tag uses the global image as-is.
    */
-  imageFor(server: ServerRow): string {
+  imageFor(server: { factorio_tag?: string | null }): string {
     const tag = (server.factorio_tag ?? '').trim();
     if (!tag) return this.config.factorioImage;
     const base = this.config.factorioImage;
@@ -241,6 +241,60 @@ export class DockerService {
    * mounted at /factorio, no ports are published, and the container is removed
    * afterwards. Returns the exit code and combined logs.
    */
+  /**
+   * An image's ID plus the `factorio.version` label the factoriotools images carry
+   * (free — no container needed). The ID is a content digest, so it makes a sound
+   * cache key for anything derived from the image's contents.
+   *
+   * With `pullIfMissing: false` this returns null instead of fetching, for callers
+   * that must stay fast (a UI hint can't block on a ~600 MB pull).
+   */
+  async imageIdentity(
+    image: string,
+    opts: { pullIfMissing?: boolean } = {},
+  ): Promise<{ id: string; factorioVersion?: string } | null> {
+    const inspect = async () => {
+      const info = await this.docker.getImage(image).inspect();
+      return { id: info.Id, factorioVersion: info.Config?.Labels?.['factorio.version'] };
+    };
+    try {
+      return await inspect();
+    } catch {
+      if (opts.pullIfMissing === false) return null;
+    }
+    await this.ensureImage(image);
+    return inspect();
+  }
+
+  /**
+   * Run a shell snippet in a throwaway container of `image` and return its output.
+   * Used to read files out of an image (its bundled mod manifests); nothing is
+   * mounted and no ports are published.
+   */
+  async runImageShell(image: string, script: string, timeoutMs = 30_000): Promise<string> {
+    const name = `ftm-imageprobe-${randomBytes(4).toString('hex')}`;
+    let container: Docker.Container | undefined;
+    try {
+      container = await this.docker.createContainer({
+        name,
+        Image: image,
+        Entrypoint: ['/bin/sh', '-c'],
+        Cmd: [script],
+        Labels: { [MANAGED_LABEL]: 'true' },
+        HostConfig: { AutoRemove: false, NetworkMode: 'none' },
+      });
+      await container.start();
+      const timer = setTimeout(() => void container?.stop({ t: 2 }).catch(() => {}), timeoutMs);
+      await container.wait();
+      clearTimeout(timer);
+      return await this.readContainerLogs(container);
+    } catch (err) {
+      throw new DockerError(`image inspection failed: ${(err as Error).message}`);
+    } finally {
+      if (container) await container.remove({ force: true, v: false }).catch(() => {});
+    }
+  }
+
   async runOneShot(
     server: ServerRow,
     hostDataDir: string,

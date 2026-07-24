@@ -181,17 +181,26 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 - **Game modes:** each server is **Vanilla**, **Space Age**, **Space Age — without Quality**, or
   **Modded** (chosen in the create wizard, editable on the Map gen tab). The mode drives which
   map-gen sliders show — Vanilla is Nauvis-only; the Space Age modes show curated **per-planet**
-  resource sliders (Nauvis, Vulcanus, Gleba, Fulgora, Aquilo) — and sets which bundled Space Age
-  mods are enabled on next start (Vanilla disables all; "without Quality" keeps space-age +
-  elevated-rails but disables the quality mod). For **Modded** servers, a **Detect resources from
-  mods** button runs the mod set once (`get_map_exchange_string` → parsed to JSON) to populate
-  **dynamic sliders** for that modpack's actual resource controls.
+  resource sliders (Nauvis, Vulcanus, Gleba, Fulgora, Aquilo) — and sets which bundled expansion
+  mods are enabled on next start. For **Modded** servers, a **Detect resources from mods** button
+  runs the mod set once (`get_map_exchange_string` → parsed to JSON) to populate **dynamic sliders**
+  for that modpack's actual resource controls.
+- **Bundled mods are read from the image, not hardcoded:** which expansion mods a mode enables is
+  derived from the **dependency graph in the image's own `info.json` files**, read once per image
+  and cached. This is not incidental — it's the difference between working across Factorio releases
+  and breaking on each one:
 
-  > ⚠️ **"Space Age — without Quality" requires Factorio 2.1+.** On 2.0.x, `space-age` declares a
-  > *hard* dependency on `quality`, so disabling quality makes the game refuse to load
-  > (`Missing required dependency quality >= 2.0.0`) and the server can't start. 2.1 changed that
-  > dependency to optional-by-default (`+ quality`), and the combination boots. 2.1 also splits the
-  > recycler into its own bundled `recycler` mod, which both `space-age` and `quality` hard-require.
+  | | `space-age` requires |
+  | --- | --- |
+  | **2.0.x** | `base`, `elevated-rails`, **`quality`** (hard) |
+  | **2.1.x** | `base`, `elevated-rails`, **`recycler`**, and `+ quality` (optional) |
+
+  So on 2.1 the new `recycler` mod is enabled automatically — nothing in this repo names it — while
+  on 2.0 the manager knows "Space Age without Quality" is impossible (`quality` comes back through
+  the closure) and **refuses it with an explanation** at start / Test & Create, rather than letting
+  the container die on `Missing required dependency quality >= 2.0.0`. The wizard greys the mode out
+  when the selected Factorio version can't run it. A future release that splits out another mod
+  needs no code change here.
 - **Map preview:** on the Map gen tab (and in the wizard), a **Preview map** button renders a PNG of
   your current (unsaved) settings via a throwaway Factorio one-shot (`--generate-map-preview`, using
   the server's mods) — click the thumbnail to expand it full-res, or reroll the seed. On Space Age
@@ -292,14 +301,18 @@ npm run dev
 Typecheck, test and build:
 
 ```bash
-cd backend  && npm run typecheck && npm test   # port allocator, drafts, save-header parsing
-cd frontend && npm run typecheck && npm run build
+cd backend  && npm run typecheck && npm test   # node:test
+cd frontend && npm run typecheck && npm test && npm run build   # vitest + jsdom
 ```
+
+Frontend tests run components for real under jsdom — which has no `EventSource`, so the log
+viewer's tests stub it and drive `ended` / `error` by hand. That makes reconnect behaviour
+(including its backoff) deterministic and assertable without a network or a container.
 
 ### Continuous integration
 
 `.github/workflows/ci.yml` runs the backend (typecheck + `node:test`) and frontend (typecheck +
-Vite build) on every push and PR. On pushes it additionally builds and publishes the Docker image,
+vitest + Vite build) on every push and PR. On pushes it additionally builds and publishes the Docker image,
 tagged `latest` and `sha-<short>`.
 
 The publish job is **opt-in and self-disabling**: it is skipped unless the repository variable
@@ -312,7 +325,7 @@ configured still gets green checks. To enable it, set that variable plus the sec
 ## Architecture / data model
 
 ```
-frontend/  React SPA (built and served by the backend in production)
+frontend/  React SPA (built and served by the backend in production; vitest + jsdom tests)
 backend/
   src/
     config.ts            env-driven config
@@ -325,6 +338,7 @@ backend/
       rconService.ts     pooled RCON connections (loopback / docker network)
       serverFiles.ts     per-server data dir, saves, server-settings.json, mod-list.json
       saveInspect.ts     read a save's version + mod list straight from its header (no boot)
+      imageProfile.ts    bundled mods + dependency graph read from the Factorio image (cached)
       modService.ts      Mod Portal API downloads
       modpackService.ts  shared modpack registry (+ seeded "Space Age" pack)
       mapGenTemplateService.ts  reusable map-gen templates
@@ -336,7 +350,7 @@ backend/
       backup.ts          per-server scheduled automatic backups
       draftPrune.ts      expire abandoned wizard drafts (releases their ports)
     routes/              REST API (auth, servers, global, mods, modpacks, mapgen-templates, system)
-  test/                  node:test — port allocator, drafts, save-header parsing
+  test/                  node:test — port allocator, drafts, save headers, image profiles
 ```
 
 **SQLite tables:** `servers` (identity/config, including the `lifecycle` draft/active column and
@@ -360,6 +374,7 @@ prune job) deletes the row and releases its ports.
 | --- | --- | --- |
 | POST | `/auth/login` `/auth/logout` · GET `/auth/me` | auth |
 | GET | `/system/status` | docker/dns/ddns health + port capacity |
+| GET | `/system/factorio-image?tag=` | what an image supports: version, bundled mods, unavailable game modes |
 | GET/POST | `/servers` | list (active only) / create directly |
 | GET/POST | `/servers/draft` | list in-progress drafts / start a new one |
 | GET/PATCH/DELETE | `/servers/draft/:id` | draft state (resume) / patch wizard state / abandon |
@@ -404,6 +419,8 @@ Realistic failure modes return structured JSON errors (`{ error: { code, message
 - **Container fails to start / bad mod** → surfaced live by **Test & Create** in the wizard, and via
   the container **logs** endpoint / live log stream afterwards; mod download errors are reported
   per-mod when applying a mod list
+- **Game mode impossible on the chosen Factorio version** → `400 VALIDATION` naming the conflict,
+  raised before any container starts (see bundled mods above)
 - **Save needs a mod we can't fetch** → creation fails with the mod named, *before* any container
   starts. This is deliberate: Factorio does not error on a save whose mods are missing — it drops
   them and hosts the world anyway — so the check has to happen from the save header, not the log

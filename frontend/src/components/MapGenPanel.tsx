@@ -6,10 +6,13 @@ import { MapGenEditor } from './MapGenEditor';
 import { MapPreview } from './MapPreview';
 import { GameModeSelect } from './GameModeSelect';
 import { Collapsible } from './Collapsible';
+import { useFactorioImage } from '../useFactorioImage';
 
 export function MapGenPanel({ server }: { server: Server }) {
   const [mapGen, setMapGen] = useState<MapGenSettings | null>(null);
   const [mode, setMode] = useState(server.gameMode);
+  // Which game modes this server's Factorio version can actually run (hint only).
+  const imageInfo = useFactorioImage(server.factorioTag);
   // Version-correct map-settings, only present after an exchange-string import.
   const [mapSettings, setMapSettings] = useState<MapGenSettings | null>(null);
   const [busy, setBusy] = useState(false);
@@ -167,7 +170,7 @@ export function MapGenPanel({ server }: { server: Server }) {
       </Collapsible>
 
       <div style={{ marginBottom: 12 }}>
-        <GameModeSelect value={mode} onChange={(m) => void changeMode(m)} />
+        <GameModeSelect value={mode} onChange={(m) => void changeMode(m)} modeIssues={imageInfo?.modeIssues} />
         {mode === 'modded' && (
           <div className="row" style={{ marginTop: 8, alignItems: 'center', gap: 10 }}>
             <button disabled={busy} onClick={() => void detectResources()}>
