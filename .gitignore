@@ -7,3 +7,4 @@ data/*.db-*
 backend/data/
 .env
 *.local
+tsconfig.tsbuildinfo
