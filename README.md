@@ -10,6 +10,9 @@ routing is done entirely by DNS **SRV records**.
 - DNS/DDNS: Cloudflare REST API
 - Runs as a single container that manages sibling Factorio containers via the Docker socket.
 
+Already running it? [UPGRADING.md](UPGRADING.md) covers which image tag to track, how to roll
+back, and what will and won't change under you. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
 ---
 
 ## How the networking works (read this first)
@@ -150,6 +153,8 @@ running if you remove the manager (`STOP_SERVERS_ON_SHUTDOWN` changes that).
 | `PUID` / `PGID`         |          | `845`                          | UID/GID the Factorio image runs as |
 | `STOP_SERVERS_ON_SHUTDOWN` |       | `false`                        | Stop all Factorio containers when the manager shuts down |
 | `RESUME_SERVERS_ON_STARTUP` |      | `true`                         | On startup, resume servers that were running |
+| `SKIP_DB_BACKUP`        |          | `false`                        | Migrate without snapshotting the DB first (makes the upgrade one-way) |
+| `APP_VERSION`           |          | `dev`                          | Build identity; stamped by CI, shown on the dashboard |
 
 > **DNS / Cloudflare is not configured via env** — set the base domain, host record, Zone ID, API
 > token, DDNS interval and IP-check URL in the dashboard (**DNS / Cloudflare settings**). They're
@@ -344,10 +349,31 @@ Frontend tests run components for real under jsdom — which has no `EventSource
 viewer's tests stub it and drive `ended` / `error` by hand. That makes reconnect behaviour
 (including its backoff) deterministic and assertable without a network or a container.
 
+### Releases
+
+Releases are tag-driven, so merging to `main` never reaches users: `main` publishes only
+`edge`, and `latest` — which the Unraid template tracks — moves solely on a version tag.
+
+```bash
+# edit CHANGELOG.md under [Unreleased], then:
+node scripts/release.mjs 1.2.3      # bumps versions, promotes the changelog,
+                                    # updates the template, commits and tags
+git push --follow-tags origin main
+```
+
+The tag triggers `.github/workflows/release.yml`, which re-checks that the tree agrees
+with the tag, runs the tests, publishes `1.2.3` / `1.2` / `1` / `latest` (stamping
+`APP_VERSION` into the image), and opens a GitHub Release from the changelog section.
+
+See [UPGRADING.md](UPGRADING.md) for the tag policy, rollback procedure, and what counts
+as a breaking change.
+
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs the backend (typecheck + `node:test`) and frontend (typecheck +
-vitest + Vite build) on every push and PR. On pushes it additionally builds and publishes the Docker image,
+`.github/workflows/ci.yml` runs the backend (typecheck + `node:test`), the frontend (typecheck +
+vitest + Vite build) and `scripts/validate-template.mjs` on every push and PR. The template check
+is not optional politeness: Community Applications serves `templates/*.xml` and `ca_profile.xml`
+straight from `main`'s raw URLs, so a malformed template is live the moment it merges. On pushes it additionally builds and publishes the Docker image,
 tagged `latest` and `sha-<short>`.
 
 The publish job is **opt-in and self-disabling**: it is skipped unless the repository variable
