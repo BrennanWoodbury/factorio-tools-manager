@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { serversDir, config } from '../config.js';
+import { serversDir, config, getHostServersDir } from '../config.js';
 import type { ServerRow } from '../db/models.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
 
@@ -25,7 +25,8 @@ export interface BackupInfo {
  * Manages the on-disk data directory for each server. The manager reads/writes
  * via its own local mount (`serversDir/<id>`); the *same* directory is bind-
  * mounted into the Factorio container at `/factorio` using the host path
- * (`config.hostServersDir/<id>`), which is what DockerService receives.
+ * (`getHostServersDir()/<id>`), which is what DockerService receives — resolved at
+ * startup from the manager's own mount table when possible.
  *
  * Layout (mirrors what the factoriotools image expects under /factorio):
  *   <id>/saves/         *.zip save files
@@ -39,7 +40,7 @@ export class ServerFilesService {
 
   /** Path as the Docker daemon sees it, for the bind mount. */
   hostDir(serverId: string): string {
-    return path.join(config.hostServersDir, serverId);
+    return path.join(getHostServersDir(), serverId);
   }
 
   savesDir(serverId: string): string {

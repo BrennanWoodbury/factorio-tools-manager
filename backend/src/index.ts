@@ -4,7 +4,7 @@ import cors from 'cors';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { config } from './config.js';
+import { config, getHostServersDir, setHostServersDir } from './config.js';
 import { buildContext } from './context.js';
 import { kvGet, kvSet } from './db/index.js';
 import { getFactorioAccount, setFactorioAccount } from './services/factorioAccount.js';
@@ -76,6 +76,24 @@ async function main() {
     }
     kvSet(ctx.db, 'default_map_templates_seeded', '1');
   }
+
+  // When containerised, learn our own Docker identity before anything spawns a
+  // server: it tells us the host path behind DATA_DIR (so sibling containers get
+  // valid bind mounts without an identity mount or HOST_SERVERS_DIR), and lets us
+  // join the Factorio network ourselves so RCON works on a plain bridge install.
+  await ctx.docker
+    .ensureNetwork()
+    .then(() => ctx.docker.ensureSelfOnNetwork())
+    .catch((err) => console.warn(`[startup] network setup: ${(err as Error).message}`));
+
+  if (!config.hostServersDirExplicit) {
+    const hostData = await ctx.docker.resolveHostPath(config.dataDir).catch(() => null);
+    if (hostData) {
+      setHostServersDir(path.join(hostData, 'servers'));
+      console.log(`[startup] host data dir resolved to ${hostData}`);
+    }
+  }
+  console.log(`[startup] Factorio containers bind-mount from ${getHostServersDir()}`);
 
   ctx.ddns.start();
   ctx.backups.start();

@@ -1,4 +1,7 @@
 import Docker from 'dockerode';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { Writable } from 'node:stream';
 import type { AppConfig } from '../config.js';
@@ -155,6 +158,100 @@ export class DockerService {
       console.log(`[docker] created network ${name}`);
     } catch (err) {
       throw new DockerError(`ensureNetwork failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Our own container, when the manager runs inside one. Null on a host-mode dev
+   * backend, which is not an error — the callers below just skip their work.
+   *
+   * Docker names a container's hostname after its short ID unless overridden, and
+   * the API accepts an ID prefix, so that's the cheap path. Templates that set an
+   * explicit hostname (Unraid does) fall through to the container ID that appears
+   * in our own mountinfo/cgroup lines.
+   */
+  private selfIdPromise?: Promise<string | null>;
+  async selfContainerId(): Promise<string | null> {
+    this.selfIdPromise ??= (async () => {
+      try {
+        const byHostname = await this.docker.getContainer(os.hostname()).inspect();
+        return byHostname.Id;
+      } catch {
+        /* hostname isn't our container ID — fall through */
+      }
+      for (const file of ['/proc/self/mountinfo', '/proc/self/cgroup']) {
+        try {
+          const match = fs.readFileSync(file, 'utf8').match(/[0-9a-f]{64}/);
+          if (match) {
+            // Confirm it really is a container we can see, not an image layer hash.
+            const c = await this.docker.getContainer(match[0]).inspect();
+            return c.Id;
+          }
+        } catch {
+          /* try the next source */
+        }
+      }
+      return null;
+    })();
+    return this.selfIdPromise;
+  }
+
+  /**
+   * Attach the manager itself to the Factorio network, so it can reach each
+   * server's RCON at `<containerName>:27015`.
+   *
+   * Without this the manager has to be placed on that network at create time,
+   * which compose can express but a one-click install can't: the network doesn't
+   * exist until the manager first runs. Getting it wrong is quietly broken rather
+   * than obviously broken — servers start and play fine, while the console and
+   * player list fail with ENOTFOUND. Doing it here means a plain bridge container
+   * works with no manual network setup.
+   */
+  async ensureSelfOnNetwork(): Promise<void> {
+    const id = await this.selfContainerId();
+    if (!id) return; // not containerised (host-mode dev) — RCON_MODE=loopback applies
+    const name = this.config.factorioNetwork;
+    try {
+      const net = await this.docker.getNetwork(name).inspect();
+      if (Object.keys(net.Containers ?? {}).some((c) => c === id)) return; // already attached
+      await this.docker.getNetwork(name).connect({ Container: id });
+      console.log(`[docker] attached manager to ${name} for RCON`);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (/already exists|already attached|endpoint with name/i.test(msg)) return;
+      console.warn(`[docker] could not attach the manager to ${name}: ${msg} — RCON may fail`);
+    }
+  }
+
+  /**
+   * The host path backing a path inside our own container, or null if we can't
+   * tell. Factorio containers are siblings on the host daemon, so their bind
+   * mounts must be expressed in *host* paths — which we otherwise have to be told
+   * (HOST_SERVERS_DIR) or have to assume the data dir is mounted at an identical
+   * path on both sides. Reading our own mount table removes both requirements,
+   * and with them a misconfiguration whose symptom is a server that starts with
+   * none of its saves.
+   */
+  async resolveHostPath(containerPath: string): Promise<string | null> {
+    const id = await this.selfContainerId();
+    if (!id) return null;
+    try {
+      const info = await this.docker.getContainer(id).inspect();
+      const target = path.resolve(containerPath);
+      let best: { source: string; destination: string } | null = null;
+      for (const m of info.Mounts ?? []) {
+        const dest = path.resolve(m.Destination);
+        const inside = target === dest || target.startsWith(`${dest}${path.sep}`);
+        if (!inside) continue;
+        // Longest matching destination wins — mounts can nest.
+        if (!best || dest.length > best.destination.length) {
+          best = { source: m.Source, destination: dest };
+        }
+      }
+      if (!best) return null;
+      return path.join(best.source, path.relative(best.destination, target));
+    } catch {
+      return null;
     }
   }
 
