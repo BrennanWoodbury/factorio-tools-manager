@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<CommunityApplications>
+  <Profile>
+Self-hosted tooling for running Factorio dedicated servers.
+
+**Factorio Tools Manager** runs many Factorio servers on one host from a single web
+UI — creation wizard with a pre-flight test boot, live RCON console and container
+logs, saves and scheduled backups, mods and shared modpacks, map-generation settings
+with per-planet previews, whitelists, and a per-server Factorio version. Each server
+runs as its own container, so games keep running across a manager update.
+
+It can also give every server its own subdomain with no port number to type, using
+Cloudflare DNS SRV records and a built-in DDNS job — optional, and configured in the
+app rather than in the container template.
+
+Issues and questions: https://github.com/BrennanWoodbury/factorio-tools-manager/issues
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/BrennanWoodbury/factorio-tools-manager/main/icon.png</Icon>
+  <WebPage>https://github.com/BrennanWoodbury/factorio-tools-manager</WebPage>
+</CommunityApplications>

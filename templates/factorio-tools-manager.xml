@@ -1,0 +1,125 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>factorio-tools-manager</Name>
+  <Repository>brennanwoodbury/factorio-manager:latest</Repository>
+  <Registry>https://hub.docker.com/r/brennanwoodbury/factorio-manager</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+
+  <Icon>https://raw.githubusercontent.com/BrennanWoodbury/factorio-tools-manager/main/icon.png</Icon>
+  <WebUI>http://[IP]:[PORT:8080]</WebUI>
+
+  <Support>https://github.com/BrennanWoodbury/factorio-tools-manager/issues</Support>
+  <Project>https://github.com/BrennanWoodbury/factorio-tools-manager</Project>
+  <TemplateURL>https://raw.githubusercontent.com/BrennanWoodbury/factorio-tools-manager/main/templates/factorio-tools-manager.xml</TemplateURL>
+  <ReadMe>https://raw.githubusercontent.com/BrennanWoodbury/factorio-tools-manager/main/README.md</ReadMe>
+
+  <Category>GameServers: Tools:Utilities</Category>
+  <ExtraSearchTerms>factorio game server multiplayer dedicated srv mods modpack</ExtraSearchTerms>
+
+  <Overview>
+Run and manage **many Factorio dedicated servers** from one web UI.
+
+This container is the manager only. It creates each Factorio server as its own
+sibling container through the Docker socket, so servers keep running across a
+manager update and are managed entirely from the UI: create, start/stop, live
+RCON console and container logs, saves and backups, mods and shared modpacks,
+map-generation settings with per-planet previews, whitelists, and per-server
+Factorio version.
+
+Optionally, each server can be reachable at its own subdomain with no port number
+to type (for example factory1.yourdomain.com), using Cloudflare DNS SRV records
+plus a built-in DDNS job. That is configured in the UI, not here, and the app
+works fine without it.
+
+[b]Before you start[/b]
+[ol]
+[li]Pick a contiguous UDP port range for your games (default 34197-34297) and
+forward it on your router to this server, using the SAME external and internal
+ports. The manager only ever hands out ports from that range, so every server it
+creates is reachable.[/li]
+[li]Set ADMIN_PASSWORD below. It is the only required setting.[/li]
+[/ol]
+
+[b]Notes[/b]
+[ul]
+[li]Game ports are published by the individual server containers, not by this one,
+so there are no game ports to map here.[/li]
+[li]The Factorio servers it creates appear in the Docker tab without their own
+templates. That is expected — manage them from this app's UI.[/li]
+[li]RCON is never exposed off the host and never appears in DNS.[/li]
+[li]The Space Age mods ship with the game and require the DLC; they are enabled,
+never downloaded.[/li]
+[/ul]
+  </Overview>
+
+  <Requires>
+A contiguous UDP port range forwarded on your router (default 34197-34297), and
+access to the Docker socket so the manager can create the server containers.
+Cloudflare DNS is optional and configured inside the app.
+  </Requires>
+
+  <Changes>
+### 2026-07-24
+- First Unraid release.
+  </Changes>
+
+  <Date>2026-07-24</Date>
+  <MinVer>6.12</MinVer>
+
+  <!-- Web UI. The container always listens on 8080; change the host side only. -->
+  <Config Name="WebUI Port" Target="8080" Default="8080" Mode="tcp"
+          Description="Host port for the web UI. Put a TLS reverse proxy in front if you expose it beyond your LAN."
+          Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+
+  <!-- Persistent data: SQLite DB plus every server's saves, mods and config. -->
+  <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/factorio-tools-manager" Mode="rw"
+          Description="Everything persistent lives here: the manager database and each server's saves, mods and config. The manager detects the host path behind this mount automatically, so the Factorio containers it creates bind-mount the right directory."
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/factorio-tools-manager</Config>
+
+  <!-- Required to create and control the per-server containers. -->
+  <Config Name="Docker Socket" Target="/var/run/docker.sock" Default="/var/run/docker.sock" Mode="rw"
+          Description="Required. The manager creates each Factorio server as a sibling container through this socket. Treat access to the web UI as equivalent to host access."
+          Type="Path" Display="always" Required="true" Mask="false">/var/run/docker.sock</Config>
+
+  <Config Name="Admin Password" Target="ADMIN_PASSWORD" Default="" Mode=""
+          Description="Required. The password for the web UI login."
+          Type="Variable" Display="always" Required="true" Mask="true"/>
+
+  <Config Name="Game Port Range" Target="GAME_PORT_RANGE" Default="34197-34297" Mode=""
+          Description="The contiguous UDP range you forwarded on your router. Servers are only ever given ports from inside it, so this must match your port forward."
+          Type="Variable" Display="always" Required="true" Mask="false">34197-34297</Config>
+
+  <Config Name="RCON Port Range" Target="RCON_PORT_RANGE" Default="27015-27115" Mode=""
+          Description="TCP range for server admin (RCON). Published on host loopback only — never forward this."
+          Type="Variable" Display="advanced" Required="false" Mask="false">27015-27115</Config>
+
+  <Config Name="Data Dir" Target="DATA_DIR" Default="/data" Mode=""
+          Description="Where the data lives inside the container. Must match the container side of the Appdata mount above."
+          Type="Variable" Display="advanced" Required="true" Mask="false">/data</Config>
+
+  <Config Name="Session Secret" Target="JWT_SECRET" Default="" Mode=""
+          Description="Signs the login session cookie. Leave blank to derive one, or set your own (openssl rand -hex 32). Changing it logs everyone out."
+          Type="Variable" Display="advanced" Required="false" Mask="true"/>
+
+  <Config Name="Factorio Image" Target="FACTORIO_IMAGE" Default="factoriotools/factorio:stable" Mode=""
+          Description="Base image for the game servers. Each server picks its own tag (stable / latest / a specific version) in the UI; this sets the repository."
+          Type="Variable" Display="advanced" Required="false" Mask="false">factoriotools/factorio:stable</Config>
+
+  <Config Name="PUID" Target="PUID" Default="845" Mode=""
+          Description="User ID the Factorio containers run as, which owns the files under appdata. 845 matches the Factorio image default; set 99 for the usual Unraid 'nobody'."
+          Type="Variable" Display="advanced" Required="false" Mask="false">845</Config>
+
+  <Config Name="PGID" Target="PGID" Default="845" Mode=""
+          Description="Group ID the Factorio containers run as. 845 matches the Factorio image default; set 100 for the usual Unraid 'users'."
+          Type="Variable" Display="advanced" Required="false" Mask="false">845</Config>
+
+  <Config Name="Resume Servers On Startup" Target="RESUME_SERVERS_ON_STARTUP" Default="true" Mode=""
+          Description="Restart the servers that were running when the manager last stopped."
+          Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+
+  <Config Name="Stop Servers On Shutdown" Target="STOP_SERVERS_ON_SHUTDOWN" Default="false" Mode=""
+          Description="Stop every Factorio server when the manager stops. Off by default so games survive a manager update."
+          Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+</Container>

@@ -89,11 +89,46 @@ docker compose up -d --build
 
 Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 
+### 4. Or on Unraid
+
+The published image is a **single container** — API and web UI in one — so it installs
+like any other Unraid app. A template lives at
+[`templates/factorio-tools-manager.xml`](templates/factorio-tools-manager.xml).
+
+Until it's listed in Community Applications, install it by hand: **Docker → Add Container →
+Template → paste the raw template URL**, or drop the XML into
+`/boot/config/plugins/dockerMan/templates-user/` and pick it from the template dropdown.
+
+Only two things need setting: **Admin Password**, and the **Game Port Range** if you didn't
+use the default — it has to match the UDP range you forwarded in step 1. Everything else has
+a working default.
+
+Two things make this work without any manual wiring on Unraid, and are worth knowing about
+because they're what a plain `bridge` install would otherwise get wrong:
+
+- **The manager attaches itself to `factorio-net` at startup.** It has to be on that network
+  to reach each server's RCON, but the network doesn't exist until the manager first runs, so
+  it can't be selected at install time. Getting this wrong fails *quietly* — servers run and
+  play fine while the console and player list report `ENOTFOUND`.
+- **The host path behind the data mount is detected from the manager's own mount table.** The
+  Factorio containers are siblings on the host daemon, so their bind mounts have to be host
+  paths. That means the appdata mount can be an ordinary `/mnt/user/appdata/… → /data`, with no
+  identity mount and no `HOST_SERVERS_DIR` to keep in sync.
+
+The Factorio servers it creates appear in Unraid's Docker tab without templates of their own —
+that's expected; manage them from this app. They also survive a manager update, and are left
+running if you remove the manager (`STOP_SERVERS_ON_SHUTDOWN` changes that).
+
 > **Data location.** Persistent data (SQLite DB + per-server saves/mods/config) is stored at
-> `/opt/factorio-tools-manager`, bind-mounted at the *same* path inside and outside the container.
-> That identity is deliberate: it makes the host path the Factorio containers bind-mount
-> (`<data>/servers/<id>`) valid on the host with no extra configuration. Override with `FTM_DATA_DIR`
-> (e.g. `FTM_DATA_DIR=$HOME/.factorio-tools-manager`).
+> `/opt/factorio-tools-manager`. Override with `FTM_DATA_DIR` (e.g.
+> `FTM_DATA_DIR=$HOME/.factorio-tools-manager`).
+>
+> The compose file bind-mounts it at the *same* path inside and outside the container. That's
+> tidy but no longer required: the manager reads its own mount table at startup to learn the
+> host path behind its data dir, so any mapping works and `HOST_SERVERS_DIR` only exists as an
+> override. That matters because the Factorio containers are siblings on the host daemon — their
+> bind mounts must be expressed in host paths, and guessing wrong yields a server that starts
+> with none of its saves.
 
 ---
 
@@ -106,7 +141,7 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 | `JWT_SECRET`            |          | derived                        | Signs session cookies; set your own (`openssl rand -hex 32`) |
 | `FTM_DATA_DIR`          |          | `/opt/factorio-tools-manager`  | Data location; identity-mounted host↔container (prod compose) |
 | `DATA_DIR`              |          | `FTM_DATA_DIR`                 | In-container data path (host-mode dev defaults to `../data`) |
-| `HOST_SERVERS_DIR`      |          | `DATA_DIR/servers`             | Host bind-mount source; auto-correct via the identity mount |
+| `HOST_SERVERS_DIR`      |          | autodetected                   | Host bind-mount source; detected from the manager's own mounts, only set it to override |
 | `GAME_PORT_RANGE`       |          | `34197-34297`                  | Pre-forwarded UDP game-port pool |
 | `RCON_PORT_RANGE`       |          | `27015-27115`                  | Loopback-only RCON port pool |
 | `FACTORIO_IMAGE`        |          | `factoriotools/factorio:stable`| Base game server image; per-server tag overrides just the tag |
@@ -275,7 +310,7 @@ Both services run from bind-mounted source with live reload (backend via `tsx wa
 frontend via Vite HMR). The first `up` runs `npm install` into named volumes (slow once,
 fast after). The backend drives the host Docker daemon and joins `factorio-net`, so RCON
 works over the Docker network — same wiring as production. Open **http://localhost:5173**
-(default login `dev`). Run it from the repo root so `HOST_SERVERS_DIR` resolves correctly.
+(default login `dev`). Run it from the repo root so the data dir resolves correctly.
 
 ### Option 2 — On the host (no containers)
 
