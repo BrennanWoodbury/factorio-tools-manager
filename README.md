@@ -124,12 +124,36 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
 
 ## Using it
 
-- **Create a server:** name + subdomain (+ optional max players, description, map generation).
-  Ports are allocated atomically and, if DNS is on, the SRV record is created.
+- **Create a server (wizard):** a multi-step flow that starts from one of three sources —
+  **generate a new map**, **import a map exchange string**, or **load an existing save**. Progress is
+  kept server-side as a **draft**: a real server row in `lifecycle='draft'` with its ports already
+  reserved, so a half-finished server can never collide with a real one and never shows up on the
+  dashboard. Drafts are listed under "Continue new server", survive a restart, and are pruned
+  automatically after they expire. Only **finalize** promotes the row to `lifecycle='active'`,
+  allocating the subdomain and creating the SRV record.
+- **Test & Create:** before finalizing, the wizard can boot the server once in a throwaway
+  container and stream the result live (SSE). It reports the actual failure — bad mod, unloadable
+  map-gen settings, wrong game version — instead of leaving you to read a crash loop afterwards.
+  Anything it creates is discarded; only the generated map is kept.
+- **Load from save:** upload a `.zip` and the manager reads the save's own header (`level-init.dat`)
+  directly — no container boot — to report the exact **Factorio version**, scenario and **full mod
+  list with pinned versions**, shown as chips the moment the upload finishes. Bundled expansion mods
+  are enabled from that list; mod-portal mods are downloaded **at the versions the world was built
+  with**. If a required mod can't be fetched, creation fails loudly — which matters because Factorio
+  itself does *not* error on a save with missing mods, it silently drops them and hosts a gutted
+  world.
+- **Container logs:** a live viewer for the container's stdout/stderr (separate from the RCON
+  console), streamed over SSE with scrollback, follow-tail, error/warning highlighting, download,
+  and automatic re-attach when the server restarts. Works on a stopped server too — you still see
+  the last container's output.
 - **Factorio.com account:** one global account (username + token), set on the Servers dashboard,
   used by **every** server for mod-portal downloads and the public server listing. There are no
   per-server credentials.
-- **Server defaults (cascade):** a **Defaults** tab sets global defaults for auto-restart and backup
+- **Settings page:** manager-wide configuration lives on a single **Settings** tab, split into
+  "Shared across instances" (Factorio.com account, server defaults, global whitelist/adminlist,
+  global advanced server settings) and "Manager config" (DNS / Cloudflare). The active subsection is
+  mirrored to the URL hash (`#settings/<key>`) so it can be linked directly.
+- **Server defaults (cascade):** the **Defaults** section sets global defaults for auto-restart and backup
   config. These **cascade**: saving pushes the new value to every server that hasn't overridden it;
   a server that overrode a setting keeps its own value until you click **"Reset to global default"**
   on that field. New servers start out inheriting everything. Also sets a default **modpack** and
@@ -162,9 +186,20 @@ Open `http://<host>:8080` and log in with `ADMIN_PASSWORD`.
   elevated-rails but disables the quality mod). For **Modded** servers, a **Detect resources from
   mods** button runs the mod set once (`get_map_exchange_string` → parsed to JSON) to populate
   **dynamic sliders** for that modpack's actual resource controls.
-- **Map preview:** on the Map gen tab, a **Preview map** button renders a PNG of your current
-  (unsaved) settings via a throwaway Factorio one-shot (`--generate-map-preview`, using the server's
-  mods) — click the thumbnail to expand it full-res, or reroll the seed.
+
+  > ⚠️ **"Space Age — without Quality" requires Factorio 2.1+.** On 2.0.x, `space-age` declares a
+  > *hard* dependency on `quality`, so disabling quality makes the game refuse to load
+  > (`Missing required dependency quality >= 2.0.0`) and the server can't start. 2.1 changed that
+  > dependency to optional-by-default (`+ quality`), and the combination boots. 2.1 also splits the
+  > recycler into its own bundled `recycler` mod, which both `space-age` and `quality` hard-require.
+- **Map preview:** on the Map gen tab (and in the wizard), a **Preview map** button renders a PNG of
+  your current (unsaved) settings via a throwaway Factorio one-shot (`--generate-map-preview`, using
+  the server's mods) — click the thumbnail to expand it full-res, or reroll the seed. On Space Age
+  modes you get a preview **per planet**, each rendered with that planet's own surface settings.
+
+  > The modded map-gen paths (dynamic sliders, modded previews) are marked **Experimental** in the
+  > UI: they depend on each modpack exposing sane map-gen controls, and are not guaranteed to work
+  > with every mod set.
 - **Map exchange strings:** paste a `>>>…<<<` string from Factorio's in-game map generator to
   **import** it — decoded to JSON by Factorio's own parser in a one-shot (needs the same version +
   mods), which populates the sliders and attaches version-correct map settings — or **export** the
@@ -248,11 +283,29 @@ npm install
 npm run dev
 ```
 
-Run the port-allocator unit tests:
+> ⚠️ **Host mode breaks once a Factorio container has written to the data dir.** The Factorio image
+> runs as `PUID`/`PGID` `845` and chowns the files it creates (config, saves, mods) to that uid. A
+> backend running on the host as *you* then gets `EACCES` on those paths. This only affects Option 2
+> — in the dev stack and in production the backend runs as root inside a container. Either use
+> Option 1, or `sudo chown -R $USER` the data dir between runs.
+
+Typecheck, test and build:
 
 ```bash
-cd backend && npm test
+cd backend  && npm run typecheck && npm test   # port allocator, drafts, save-header parsing
+cd frontend && npm run typecheck && npm run build
 ```
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs the backend (typecheck + `node:test`) and frontend (typecheck +
+Vite build) on every push and PR. On pushes it additionally builds and publishes the Docker image,
+tagged `latest` and `sha-<short>`.
+
+The publish job is **opt-in and self-disabling**: it is skipped unless the repository variable
+`DOCKERHUB_IMAGE` is set (e.g. `youruser/factorio-tools-manager`), so a fork with no registry
+configured still gets green checks. To enable it, set that variable plus the secrets
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
 ---
 
@@ -263,22 +316,43 @@ frontend/  React SPA (built and served by the backend in production)
 backend/
   src/
     config.ts            env-driven config
-    db/                  node:sqlite + schema + repos
+    db/                  node:sqlite + schema + migrations + repos
     services/
       portAllocator.ts   atomic game/RCON port allocation (unit-tested)
-      dockerService.ts   create/start/stop/remove Factorio containers (dockerode)
+      dockerService.ts   create/start/stop/remove Factorio containers + one-shot probes (dockerode)
       dnsService.ts      Cloudflare SRV records + shared host A record
+      dnsSettings.ts     DNS config persisted in the DB (not env)
       rconService.ts     pooled RCON connections (loopback / docker network)
       serverFiles.ts     per-server data dir, saves, server-settings.json, mod-list.json
+      saveInspect.ts     read a save's version + mod list straight from its header (no boot)
       modService.ts      Mod Portal API downloads
-      serverManager.ts   lifecycle orchestration (ties it all together)
-    jobs/ddns.ts         periodic public-IP → A-record sync
-    routes/              REST API (auth, servers, system)
+      modpackService.ts  shared modpack registry (+ seeded "Space Age" pack)
+      mapGenTemplateService.ts  reusable map-gen templates
+      globalDefaults.ts  cascading global defaults
+      factorioAccount.ts the single global Factorio.com account
+      serverManager.ts   lifecycle + wizard/draft orchestration (ties it all together)
+    jobs/
+      ddns.ts            periodic public-IP → A-record sync
+      backup.ts          per-server scheduled automatic backups
+      draftPrune.ts      expire abandoned wizard drafts (releases their ports)
+    routes/              REST API (auth, servers, global, mods, modpacks, mapgen-templates, system)
+  test/                  node:test — port allocator, drafts, save-header parsing
 ```
 
-**SQLite tables:** `servers` (identity/config), `port_allocations` (atomic port registry, PK
-`(kind, port)` makes double-allocation impossible), `dns_records` (Cloudflare record bookkeeping
-for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id).
+**SQLite tables:** `servers` (identity/config, including the `lifecycle` draft/active column and
+`draft_state_json`), `port_allocations` (atomic port registry, PK `(kind, port)` makes
+double-allocation impossible), `dns_records` (Cloudflare record bookkeeping for reconcile/cleanup),
+`modpacks` / `modpack_mods`, `map_gen_templates`, `kv` (singletons like last public IP / host
+A-record id). Schema changes ship as numbered migrations applied on boot.
+
+### Draft lifecycle
+
+Every server row carries a `lifecycle` of `draft` or `active`. A wizard run creates the row up
+front as a `draft` — with real ports reserved and a placeholder subdomain (`__draft_<id>`) — and
+stores wizard progress in `draft_state_json`. The repository's `list()` filters on
+`lifecycle='active'`, which is the single choke-point keeping drafts off the dashboard and out of
+DNS. Finalizing flips the row to `active` and assigns the real subdomain; abandoning it (or the
+prune job) deletes the row and releases its ports.
 
 ### REST API (all under `/api`, session-cookie auth except `/auth/*`)
 
@@ -286,18 +360,27 @@ for reconcile/cleanup), `kv` (singletons like last public IP / host A-record id)
 | --- | --- | --- |
 | POST | `/auth/login` `/auth/logout` · GET `/auth/me` | auth |
 | GET | `/system/status` | docker/dns/ddns health + port capacity |
-| GET/POST | `/servers` | list / create |
+| GET/POST | `/servers` | list (active only) / create directly |
+| GET/POST | `/servers/draft` | list in-progress drafts / start a new one |
+| GET/PATCH/DELETE | `/servers/draft/:id` | draft state (resume) / patch wizard state / abandon |
+| POST | `/servers/draft/:id/save` | upload a save; returns its version + mods from the header |
+| GET | `/servers/draft/:id/test-create` | **SSE** — boot once and stream the result (Test & Create) |
+| POST | `/servers/draft/:id/finalize` | promote draft → active (allocates subdomain + SRV) |
 | GET/PATCH/DELETE | `/servers/:id` | detail / update / delete |
 | POST | `/servers/:id/{start,stop,restart}` | lifecycle |
 | GET | `/servers/:id/status` | live state + players |
-| GET | `/servers/:id/logs` | container logs |
-| GET/PUT | `/servers/:id/settings` | full server-settings.json body |
+| GET | `/servers/:id/logs` | container logs (one shot) |
+| GET | `/servers/:id/logs/stream` | **SSE** — live container log stream (scrollback + follow) |
+| GET/PUT | `/servers/:id/settings` · POST `/settings/reset` | full server-settings.json body / reset a field to global |
 | GET/PUT | `/servers/:id/mapgen` | this server's map-gen-settings (new-map generation) |
+| POST | `/servers/:id/mapgen/{import,export,baseline,preview}` | exchange-string import/export · mod-detected sliders · render a preview PNG |
 | GET/POST/PATCH/DELETE | `/mapgen-templates[...]` | map-gen template registry (list/create/edit/delete) |
 | POST/GET | `/mapgen-templates/{import,from-server}` · `/:id/export` | import / snapshot / export a template |
 | GET/PUT | `/servers/:id/{whitelist,adminlist}` · `/global/{whitelist,adminlist}` | per-server / global whitelist + admin list |
 | GET/PUT | `/global/factorio` | the global Factorio.com account (mods + public listing) |
-| GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / create / select / download / delete |
+| GET/PUT | `/global/defaults` · `/global/advanced-settings` | cascading server defaults / global server-settings defaults |
+| GET/PUT | `/global/dns` · POST `/global/dns/test` | Cloudflare settings / test connection |
+| GET/POST/DELETE | `/servers/:id/saves[...]` | list / upload / create / select / restore / download / delete |
 | GET/POST/DELETE | `/servers/:id/backups[...]` | list / create / download / restore / delete |
 | GET/PUT | `/servers/:id/mods` | get / apply mod list |
 | POST | `/servers/:id/mods/{upload,update,deleteAll}` · GET `/mods/export` | mod ops |
@@ -318,8 +401,12 @@ Realistic failure modes return structured JSON errors (`{ error: { code, message
 - **Cloudflare API failure** → `502 CLOUDFLARE_ERROR` (server creation is rolled back so no ports
   are left claimed for an unreachable server)
 - **Docker daemon unreachable** → `502 DOCKER_ERROR`
-- **Container fails to start / bad mod** → surfaced via the container **logs** endpoint; mod
-  download errors are reported per-mod when applying a mod list
+- **Container fails to start / bad mod** → surfaced live by **Test & Create** in the wizard, and via
+  the container **logs** endpoint / live log stream afterwards; mod download errors are reported
+  per-mod when applying a mod list
+- **Save needs a mod we can't fetch** → creation fails with the mod named, *before* any container
+  starts. This is deliberate: Factorio does not error on a save whose mods are missing — it drops
+  them and hosts the world anyway — so the check has to happen from the save header, not the log
 - **Validation** (bad subdomain label, save name, etc.) → `400 VALIDATION`
 
 ---
