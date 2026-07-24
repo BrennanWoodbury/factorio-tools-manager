@@ -8,11 +8,11 @@ import { ExperimentalNote } from './ExperimentalNote';
 
 // ---- tiny immutable path helpers over the raw settings object ----
 
-function getPath(obj: any, path: (string | number)[]): any {
+export function getPath(obj: any, path: (string | number)[]): any {
   return path.reduce((o, k) => (o == null ? undefined : o[k]), obj);
 }
 
-function setPath(obj: any, path: (string | number)[], value: any): any {
+export function setPath(obj: any, path: (string | number)[], value: any): any {
   const [k, ...rest] = path;
   const clone: any = Array.isArray(obj) ? [...obj] : { ...(obj ?? {}) };
   clone[k] = rest.length ? setPath(clone[k], rest, value) : value;
@@ -20,7 +20,7 @@ function setPath(obj: any, path: (string | number)[], value: any): any {
 }
 
 /** Qualitative label for a frequency/size/richness multiplier (matches the game's feel). */
-function levelLabel(v: number): string {
+export function levelLabel(v: number): string {
   if (v <= 0) return 'None';
   if (v < 0.5) return 'Very low';
   if (v < 0.95) return 'Low';

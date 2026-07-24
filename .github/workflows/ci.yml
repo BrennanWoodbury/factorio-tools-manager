@@ -31,7 +31,7 @@ jobs:
         working-directory: backend
 
   frontend:
-    name: Frontend — typecheck & build
+    name: Frontend — typecheck, tests & build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +44,8 @@ jobs:
         working-directory: frontend
       - run: npm run typecheck
         working-directory: frontend
-      # `npm run build` runs `tsc -b` then `vite build`, so this covers the bundle too.
+      - run: npm test
+        working-directory: frontend
       - run: npm run build
         working-directory: frontend
 
