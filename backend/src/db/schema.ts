@@ -95,4 +95,86 @@ CREATE TABLE IF NOT EXISTS map_gen_templates (
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ---------------------------------------------------------------------------
+-- Blueprint library
+--
+-- A durable, cross-save index of every blueprint we have ever seen, so a
+-- blueprint outlives the save (and the server) it was found in. Answering "which
+-- game was that blueprint in?" is the entire point, so content lives in ONE row
+-- and the places it was observed are separate rows pointing at it.
+--
+-- Storage follows git's blob/tree split:
+--   * blueprint_blobs     - content, addressed by hash (the "blob")
+--   * blueprint_children  - a book's ordered child hashes (the "tree")
+-- Editing one blueprint inside a big book therefore writes one small blob plus a
+-- new child list, not another copy of the whole book.
+--
+-- Identity is the sha256 of the CANONICALISED decoded JSON, never the raw base64:
+-- zlib output is not guaranteed stable across Factorio versions, and hashing the
+-- string directly would make a harmless re-compression look like a new version.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS blueprint_blobs (
+  hash          TEXT PRIMARY KEY,   -- sha256 of canonical decoded JSON
+  kind          TEXT NOT NULL CHECK (kind IN
+                  ('blueprint','blueprint_book','deconstruction_planner','upgrade_planner')),
+  label         TEXT,               -- most blueprints are UNLABELLED; icons identify them
+  icons_json    TEXT NOT NULL DEFAULT '[]',
+  -- Full blueprint string. Kept for books and for any item that failed a
+  -- decompose/re-encode round trip; otherwise re-encoded on demand from payload.
+  string        TEXT,
+  payload_json  TEXT,               -- canonical decoded envelope (NULL for books)
+  entity_counts_json TEXT,          -- {entity_name: count} — basis of similarity scoring
+  entity_total  INTEGER NOT NULL DEFAULT 0,
+  tile_count    INTEGER NOT NULL DEFAULT 0,
+  game_version  TEXT,               -- '2.1.12.2', decoded from the payload's u64
+  byte_size     INTEGER NOT NULL DEFAULT 0,
+  first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_seen_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_bp_blobs_kind  ON blueprint_blobs(kind);
+CREATE INDEX IF NOT EXISTS idx_bp_blobs_label ON blueprint_blobs(label);
+
+-- Ordered membership of a book. (book_hash, position) so a book may legitimately
+-- contain the same blueprint twice.
+CREATE TABLE IF NOT EXISTS blueprint_children (
+  book_hash  TEXT NOT NULL,
+  position   INTEGER NOT NULL,
+  child_hash TEXT NOT NULL,
+  PRIMARY KEY (book_hash, position),
+  FOREIGN KEY (book_hash)  REFERENCES blueprint_blobs(hash) ON DELETE CASCADE,
+  FOREIGN KEY (child_hash) REFERENCES blueprint_blobs(hash) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_bp_children_child ON blueprint_children(child_hash);
+
+-- Every observation of a blob. Identical content in two saves = one blob, two
+-- sightings; that is what powers "also in 2 other saves". server_id is nullable
+-- and ON DELETE SET NULL so deleting a server never destroys the blueprint —
+-- orphaned sightings keep their collection label instead.
+CREATE TABLE IF NOT EXISTS blueprint_sightings (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  hash         TEXT NOT NULL,
+  server_id    TEXT,
+  save_name    TEXT NOT NULL DEFAULT '',
+  -- Where inside the save: 'player:Woody/inventory', 'steel-chest@[-142,88]', ...
+  location     TEXT NOT NULL DEFAULT '',
+  -- Slot address within its container, e.g. 'blueprint_book:Rail Standards/3:Item Load'.
+  -- Same path + changed content = an edit; this is the version lineage key.
+  path         TEXT NOT NULL DEFAULT '',
+  -- User-supplied grouping for uploads with no server (saves carry no title or
+  -- description of their own — verified against a real save's info.json).
+  collection   TEXT,
+  source       TEXT NOT NULL DEFAULT 'scan'
+                 CHECK (source IN ('scan','upload','paste','backup')),
+  seen_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (hash)      REFERENCES blueprint_blobs(hash) ON DELETE CASCADE,
+  FOREIGN KEY (server_id) REFERENCES servers(id)           ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bp_sight_hash   ON blueprint_sightings(hash);
+CREATE INDEX IF NOT EXISTS idx_bp_sight_server ON blueprint_sightings(server_id);
+CREATE INDEX IF NOT EXISTS idx_bp_sight_path   ON blueprint_sightings(server_id, path);
 `;
