@@ -96,12 +96,30 @@ export const config = {
   // Factorio containers it spawns are bind-mounted from the host path. These can
   // differ, so it's configured explicitly. Defaults to DATA_DIR/servers.
   hostServersDir: opt('HOST_SERVERS_DIR', path.resolve(opt('DATA_DIR', path.resolve(process.cwd(), '../data')), 'servers')),
+  /** Whether HOST_SERVERS_DIR was set explicitly (so autodetection must not override it). */
+  hostServersDirExplicit: process.env.HOST_SERVERS_DIR !== undefined && process.env.HOST_SERVERS_DIR !== '',
 
   // DNS / DDNS (Cloudflare) is configured entirely from the dashboard and stored
   // in the DB (see services/dnsSettings.ts) — there are no DNS env vars.
 } as const;
 
 export type AppConfig = typeof config;
+
+/**
+ * Startup can improve on the configured host servers dir by reading the manager's
+ * own mount table (see DockerService.resolveHostPath), so this one value is
+ * resolved late rather than frozen at import.
+ */
+let hostServersDirOverride: string | null = null;
+
+export function setHostServersDir(dir: string): void {
+  hostServersDirOverride = dir;
+}
+
+/** The servers dir as the *host* Docker daemon sees it. */
+export function getHostServersDir(): string {
+  return hostServersDirOverride ?? config.hostServersDir;
+}
 
 /** Directory (as the manager process sees it) holding all per-server data dirs. */
 export const serversDir = path.resolve(config.dataDir, 'servers');
