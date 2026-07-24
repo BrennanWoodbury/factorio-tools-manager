@@ -1,0 +1,47 @@
+# Changelog
+
+Notable changes per release. This file is the source for the GitHub Release body and
+for the Unraid template's `<Changes>` block, so keep entries written for users rather
+than for the commit log.
+
+Versioning is [semantic](https://semver.org/): the **major** covers anything a user has
+to act on — a renamed environment variable, a changed data-dir layout, a template field
+they must re-enter, or a migration that can't be undone. Those get a documented upgrade
+path in the release notes and are never shipped in a minor or patch.
+
+## [Unreleased]
+
+First tagged release. Everything before this shipped continuously from `main`; from
+here on, `latest` only moves when a version is tagged.
+
+### Added
+
+- Create-server wizard with drafts that survive a restart, a pre-flight **Test &
+  Create** boot probe, and three sources: generate a map, import an exchange string,
+  or load an existing save.
+- **Load from save** reads the save's own header, so the exact Factorio version and
+  mod list (pinned to the versions the world was built with) are known before any
+  container starts.
+- Live container log viewer and RCON console, saves, scheduled and manual backups,
+  mods, shared modpacks, map-gen templates, whitelists and admin lists.
+- Map generation with per-planet previews for Space Age.
+- Optional per-subdomain routing via Cloudflare DNS SRV records with a DDNS job.
+- Unraid support: single container, Community Applications template, and automatic
+  Docker network and host-path setup.
+- The running version is shown on the dashboard and returned by
+  `GET /api/system/status`.
+
+### Changed
+
+- Bundled expansion mods and game-mode enablement are derived from the Factorio
+  image's own dependency graph rather than a hardcoded list, so Factorio 2.1's
+  `recycler` is handled without a code change and impossible mode/version
+  combinations are refused with an explanation.
+
+### Safety
+
+- The database is snapshotted to `db-backups/` before any migration runs, and the
+  manager refuses to start against a database written by a newer release rather than
+  operating on a schema it doesn't understand.
+
+[Unreleased]: https://github.com/BrennanWoodbury/factorio-tools-manager/commits/main
